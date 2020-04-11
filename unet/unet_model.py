@@ -1,7 +1,4 @@
 """ Full assembly of the parts to form the complete network """
-
-import torch.nn.functional as F
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
