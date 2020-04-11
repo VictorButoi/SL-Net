@@ -9,7 +9,6 @@ from PIL import Image
 from torchvision import transforms
 
 from unet import UNet
-from utils.data_vis import plot_img_and_mask
 from utils.dataset import BasicDataset
 
 
@@ -52,7 +51,7 @@ def predict_img(net,
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--model', '-m', default='checkpoints/CP_epoch1.pth',
+    parser.add_argument('--model', '-m', default='checkpoints/CP_epoch3.pth',
                         metavar='FILE',
                         help="Specify the file in which the model is stored")
     parser.add_argument('--input', '-i', metavar='INPUT', nargs='+',
@@ -130,7 +129,3 @@ if __name__ == "__main__":
             result.save(out_files[i])
 
             logging.info("Mask saved to {}".format(out_files[i]))
-
-        if args.viz:
-            logging.info("Visualizing results for image {}, close to continue ...".format(fn))
-            plot_img_and_mask(img, mask)
