@@ -19,17 +19,16 @@ class TiedUNet(nn.Module):
         self.inc = DoubleConv(n_channels, 64)
 
         self.super_down_layer = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.super_down_layer_double = nn.Conv2d(128, 64, kernel_size=3, padding=1)
         self.super_up_layer = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
         self.outc = nn.Conv2d(64, n_classes, kernel_size=1)
 
     def forward(self, x):
         """INTRO CONV"""
-        print(x.shape)
         x1 = self.inc(x)
 
         """FIRST DOWN CONV"""
-        print(x1.shape)
         x2 = self.maxPool(x1)
         x2 = self.super_down_layer(x2)
         x2 = self.batch_norm(x2)
@@ -39,7 +38,6 @@ class TiedUNet(nn.Module):
         x2 = self.ReLU(x2)
 
         """SECOND DOWN CONV"""
-        print(x2.shape)
         x3 = self.maxPool(x2)
         x3 = self.super_down_layer(x3)
         x3 = self.batch_norm(x3)
@@ -49,7 +47,6 @@ class TiedUNet(nn.Module):
         x3 = self.ReLU(x3)
 
         """THREE DOWN CONV"""
-        print(x3.shape)
         x4 = self.maxPool(x3)
         x4 = self.super_down_layer(x4)
         x4 = self.batch_norm(x4)
@@ -59,7 +56,6 @@ class TiedUNet(nn.Module):
         x4 = self.ReLU(x4)
 
         """FOUR DOWN CONV"""
-        print(x4.shape)
         x5 = self.maxPool(x4)
         x5 = self.super_down_layer(x5)
         x5 = self.batch_norm(x5)
@@ -68,8 +64,6 @@ class TiedUNet(nn.Module):
         x5 = self.batch_norm(x5)
         x5 = self.ReLU(x5)
 
-        print(x5.shape)
-
         """FIRST UP CONV"""
         x5 = self.super_up_layer(x5)
         diffY = torch.tensor([x4.size()[2] - x5.size()[2]])
@@ -77,13 +71,12 @@ class TiedUNet(nn.Module):
         x5 = F.pad(x5, [diffX // 2, diffX - diffX // 2,
                         diffY // 2, diffY - diffY // 2])
         x6 = torch.cat([x4, x5], dim=1)
-        x6 = self.super_down_layer(x6)
-        x6 = self.BatchNorm2d(x6)
+        x6 = self.super_down_layer_double(x6)
+        x6 = self.batch_norm(x6)
         x6 = self.ReLU(x6)
         x6 = self.super_down_layer(x6)
-        x6 = self.BatchNorm2d(x6)
+        x6 = self.batch_norm(x6)
         x6 = self.ReLU(x6)
-        print(x6.shape)
 
         """TWO UP CONV"""
         x = self.super_up_layer(x6)
@@ -92,13 +85,12 @@ class TiedUNet(nn.Module):
         x = F.pad(x, [diffX // 2, diffX - diffX // 2,
                         diffY // 2, diffY - diffY // 2])
         x = torch.cat([x3, x], dim=1)
-        x = self.super_down_layer(x)
-        x = self.BatchNorm2d(x)
+        x = self.super_down_layer_double(x)
+        x = self.batch_norm(x)
         x = self.ReLU(x)
         x = self.super_down_layer(x)
-        x = self.BatchNorm2d(x)
+        x = self.batch_norm(x)
         x = self.ReLU(x)
-        print(x.shape)
 
         """THREE UP CONV"""
         x = self.super_up_layer(x)
@@ -107,13 +99,12 @@ class TiedUNet(nn.Module):
         x = F.pad(x, [diffX // 2, diffX - diffX // 2,
                         diffY // 2, diffY - diffY // 2])
         x = torch.cat([x2, x], dim=1)
-        x = self.super_down_layer(x)
-        x = self.BatchNorm2d(x)
+        x = self.super_down_layer_double(x)
+        x = self.batch_norm(x)
         x = self.ReLU(x)
         x = self.super_down_layer(x)
-        x = self.BatchNorm2d(x)
+        x = self.batch_norm(x)
         x = self.ReLU(x)
-        print(x.shape)
 
         """FOUR UP CONV"""
         x = self.super_up_layer(x)
@@ -122,13 +113,12 @@ class TiedUNet(nn.Module):
         x = F.pad(x, [diffX // 2, diffX - diffX // 2,
                         diffY // 2, diffY - diffY // 2])
         x = torch.cat([x1, x], dim=1)
-        x = self.super_down_layer(x)
-        x = self.BatchNorm2d(x)
+        x = self.super_down_layer_double(x)
+        x = self.batch_norm(x)
         x = self.ReLU(x)
         x = self.super_down_layer(x)
-        x = self.BatchNorm2d(x)
+        x = self.batch_norm(x)
         x = self.ReLU(x)
-        print(x.shape)
 
         logits = self.outc(x)
         return logits
