@@ -40,6 +40,7 @@ class TiedUNet(nn.Module):
 
 
     def forward(self, x):
+        print(x.shape)
         x1 = self.inc(x)
 
         down_path = [x1]
