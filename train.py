@@ -155,8 +155,8 @@ if __name__ == '__main__':
     #   - For 1 class and background, use n_classes=1
     #   - For 2 classes, use n_classes=1
     #   - For N > 2 classes, use n_classes=N
-    net = UNet(n_channels=3, n_classes=1, bilinear=True)
-    #net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
+    #net = UNet(n_channels=3, n_classes=1, bilinear=True)
+    net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
 
     logging.info(f'Network:\n'
                  f'\t{net.n_channels} input channels\n'
