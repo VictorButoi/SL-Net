@@ -1,7 +1,6 @@
-""" Full assembly of the parts to form the complete network """
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
+
+from .unet_parts import *
 
 
 class TiedUNet(nn.Module):
@@ -29,6 +28,7 @@ class TiedUNet(nn.Module):
         """INTRO CONV"""
         print(x.shape)
         x1 = self.inc(x)
+
         """FIRST DOWN CONV"""
         print(x1.shape)
         x2 = self.maxPool(x1)
@@ -38,6 +38,7 @@ class TiedUNet(nn.Module):
         x2 = self.super_layer(x2)
         x2 = self.batch_norm(x2)
         x2 = self.ReLU(x2)
+
         """SECOND DOWN CONV"""
         print(x2.shape)
         x3 = self.maxPool(x2)
@@ -47,6 +48,7 @@ class TiedUNet(nn.Module):
         x3 = self.super_layer(x3)
         x3 = self.batch_norm(x3)
         x3 = self.ReLU(x3)
+
         """THREE DOWN CONV"""
         print(x3.shape)
         x4 = self.maxPool(x3)
@@ -56,6 +58,7 @@ class TiedUNet(nn.Module):
         x4 = self.super_layer(x4)
         x4 = self.batch_norm(x4)
         x4 = self.ReLU(x4)
+
         """FOUR DOWN CONV"""
         print(x4.shape)
         x5 = self.maxPool(x4)
@@ -65,6 +68,7 @@ class TiedUNet(nn.Module):
         x5 = self.super_layer(x5)
         x5 = self.batch_norm(x5)
         x5 = self.ReLU(x5)
+
         print(x5.shape)
 
         """FIRST UP CONV"""
@@ -109,36 +113,3 @@ class TiedUNet(nn.Module):
 
         logits = self.outc(x)
         return logits
-
-class DoubleConv(nn.Module):
-    """(convolution => [BN] => ReLU) * 2"""
-
-    def __init__(self, in_channels, out_channels,mid_channels=None):
-        super().__init__()
-        if not mid_channels:
-            mid_channels = out_channels
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self, x):
-        return self.double_conv(x)
-
-
-class Down(nn.Module):
-    """Downscaling with maxpool then double conv"""
-
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.maxpool_conv = nn.Sequential(
-            nn.MaxPool2d(2),
-            DoubleConv(in_channels, out_channels)
-        )
-
-    def forward(self, x):
-        return self.maxpool_conv(x)
