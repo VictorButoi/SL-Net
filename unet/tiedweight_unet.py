@@ -24,101 +24,40 @@ class TiedUNet(nn.Module):
 
         self.outc = nn.Conv2d(64, n_classes, kernel_size=1)
 
+    
+    def conv_seq(self, x, option='down'):
+        if(option == 'down'):
+            x = self.maxPool(x)
+            x = self.super_down_layer(x)
+        else:
+            x = self.super_down_layer_double(x)
+        x = self.batch_norm(x)
+        x = self.ReLU(x)
+        x = self.super_down_layer(x)
+        x = self.batch_norm(x)
+        x = self.ReLU(x)
+        return x
+
+
     def forward(self, x):
-        """INTRO CONV"""
         x1 = self.inc(x)
 
-        """FIRST DOWN CONV"""
-        x2 = self.maxPool(x1)
-        x2 = self.super_down_layer(x2)
-        x2 = self.batch_norm(x2)
-        x2 = self.ReLU(x2)
-        x2 = self.super_down_layer(x2)
-        x2 = self.batch_norm(x2)
-        x2 = self.ReLU(x2)
+        down_path = [x1]
 
-        """SECOND DOWN CONV"""
-        x3 = self.maxPool(x2)
-        x3 = self.super_down_layer(x3)
-        x3 = self.batch_norm(x3)
-        x3 = self.ReLU(x3)
-        x3 = self.super_down_layer(x3)
-        x3 = self.batch_norm(x3)
-        x3 = self.ReLU(x3)
+        for i in range(4):
+            down_path.append(self.conv_seq(down_path[-1]))
 
-        """THREE DOWN CONV"""
-        x4 = self.maxPool(x3)
-        x4 = self.super_down_layer(x4)
-        x4 = self.batch_norm(x4)
-        x4 = self.ReLU(x4)
-        x4 = self.super_down_layer(x4)
-        x4 = self.batch_norm(x4)
-        x4 = self.ReLU(x4)
+        up_path = [down_path[-1]]
+        for i in range(2,6):
+            x1 = up_path[-1]
+            x2 = down_path[-i]
+            x1 = self.super_up_layer(x1)
+            diffY = torch.tensor(x2.size()[2] - x1.size()[2])
+            diffX = torch.tensor(x2.size()[3] - x1.size()[3])
+            x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                            diffY // 2, diffY - diffY // 2])
+            x = torch.cat([x2, x1], dim=1)
+            up_path.append(self.conv_seq(x, option='up'))
 
-        """FOUR DOWN CONV"""
-        x5 = self.maxPool(x4)
-        x5 = self.super_down_layer(x5)
-        x5 = self.batch_norm(x5)
-        x5 = self.ReLU(x5)
-        x5 = self.super_down_layer(x5)
-        x5 = self.batch_norm(x5)
-        x5 = self.ReLU(x5)
-
-        """FIRST UP CONV"""
-        x5 = self.super_up_layer(x5)
-        diffY = torch.tensor([x4.size()[2] - x5.size()[2]])
-        diffX = torch.tensor([x4.size()[3] - x5.size()[3]])
-        x5 = F.pad(x5, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
-        x6 = torch.cat([x4, x5], dim=1)
-        x6 = self.super_down_layer_double(x6)
-        x6 = self.batch_norm(x6)
-        x6 = self.ReLU(x6)
-        x6 = self.super_down_layer(x6)
-        x6 = self.batch_norm(x6)
-        x6 = self.ReLU(x6)
-
-        """TWO UP CONV"""
-        x = self.super_up_layer(x6)
-        diffY = torch.tensor([x3.size()[2] - x.size()[2]])
-        diffX = torch.tensor([x3.size()[3] - x.size()[3]])
-        x = F.pad(x, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
-        x = torch.cat([x3, x], dim=1)
-        x = self.super_down_layer_double(x)
-        x = self.batch_norm(x)
-        x = self.ReLU(x)
-        x = self.super_down_layer(x)
-        x = self.batch_norm(x)
-        x = self.ReLU(x)
-
-        """THREE UP CONV"""
-        x = self.super_up_layer(x)
-        diffY = torch.tensor([x2.size()[2] - x.size()[2]])
-        diffX = torch.tensor([x2.size()[3] - x.size()[3]])
-        x = F.pad(x, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
-        x = torch.cat([x2, x], dim=1)
-        x = self.super_down_layer_double(x)
-        x = self.batch_norm(x)
-        x = self.ReLU(x)
-        x = self.super_down_layer(x)
-        x = self.batch_norm(x)
-        x = self.ReLU(x)
-
-        """FOUR UP CONV"""
-        x = self.super_up_layer(x)
-        diffY = torch.tensor([x1.size()[2] - x.size()[2]])
-        diffX = torch.tensor([x1.size()[3] - x.size()[3]])
-        x = F.pad(x, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
-        x = torch.cat([x1, x], dim=1)
-        x = self.super_down_layer_double(x)
-        x = self.batch_norm(x)
-        x = self.ReLU(x)
-        x = self.super_down_layer(x)
-        x = self.batch_norm(x)
-        x = self.ReLU(x)
-
-        logits = self.outc(x)
+        logits = self.outc(up_path[-1])
         return logits
