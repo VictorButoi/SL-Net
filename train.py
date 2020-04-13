@@ -17,10 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.dataset import BasicDataset
 from torch.utils.data import DataLoader, random_split
 
-dir_img = 'data/imgs/'
-dir_mask = 'data/masks/'
 dir_checkpoint = 'checkpoints/'
-
 
 def train_net(net,
               device,
@@ -31,7 +28,7 @@ def train_net(net,
               save_cp=True,
               img_scale=0.5):
 
-    dataset = BasicDataset(dir_img, dir_mask, img_scale)
+    dataset = BasicDataset('data/imgs/', 'data/masks/', img_scale)
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
@@ -67,10 +64,6 @@ def train_net(net,
             for batch in train_loader:
                 imgs = batch['image']
                 true_masks = batch['mask']
-                assert imgs.shape[1] == net.n_channels, \
-                    f'Network has been defined with {net.n_channels} input channels, ' \
-                    f'but loaded images have {imgs.shape[1]} channels. Please check that ' \
-                    'the images are loaded correctly.'
 
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 mask_type = torch.float32 if net.n_classes == 1 else torch.long
@@ -149,19 +142,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    # Change here to adapt to your data
-    # n_channels=3 for RGB images
-    # n_classes is the number of probabilities you want to get per pixel
-    #   - For 1 class and background, use n_classes=1
-    #   - For 2 classes, use n_classes=1
-    #   - For N > 2 classes, use n_classes=N
     #net = UNet(n_channels=3, n_classes=1, bilinear=True)
     net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
-
-    logging.info(f'Network:\n'
-                 f'\t{net.n_channels} input channels\n'
-                 f'\t{net.n_classes} output channels (classes)\n'
-                 f'\t{"Bilinear" if net.bilinear else "Transposed conv"} upscaling')
 
     if args.load:
         net.load_state_dict(
@@ -170,8 +152,6 @@ if __name__ == '__main__':
         logging.info(f'Model loaded from {args.load}')
 
     net.to(device=device)
-    # faster convolutions, but more memory
-    # cudnn.benchmark = True
 
     try:
         train_net(net=net,
@@ -181,6 +161,7 @@ if __name__ == '__main__':
                   device=device,
                   img_scale=args.scale,
                   val_percent=args.val / 100)
+    
     except KeyboardInterrupt:
         try:
             sys.exit(0)
