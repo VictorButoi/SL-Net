@@ -4,6 +4,7 @@ import os
 import sys
 
 import numpy as np
+from matplotlib import pyplot
 import torch
 import torch.nn as nn
 from torch import optim
@@ -12,6 +13,7 @@ from tqdm import tqdm
 from eval import eval_net
 from unet import UNet
 from unet import TiedUNet
+from dice_loss import dice_coeff
 
 from torch.utils.tensorboard import SummaryWriter
 from utils.dataset import BasicDataset
@@ -53,6 +55,8 @@ def train_net(net,
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
     criterion = nn.BCEWithLogitsLoss()
 
+    val_scores = []
+
     for epoch in range(epochs):
         net.train()
 
@@ -80,13 +84,17 @@ def train_net(net,
 
                 pbar.update(imgs.shape[0])
                 global_step += 1
-                
+
                 if global_step % (len(dataset) // (10 * batch_size)) == 0:
                     for tag, value in net.named_parameters():
                         tag = tag.replace('.', '/')
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
+                    
                     val_score = eval_net(net, val_loader, device)
+
+                    val_scores.append(val_score)
+                    
                     scheduler.step(val_score)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
@@ -108,6 +116,15 @@ def train_net(net,
             logging.info(f'Checkpoint {epoch + 1} saved !')
 
     writer.close()
+
+    domain = range(len(train_scores))
+    pyplot.title('Percent Error v. Epoch Training Set')
+    pyplot.xlabel('Iteration Checkpoint')
+    pyplot.ylabel('Dice')
+    pyplot.plot(domain, val_scores, label="Test Dice")
+    pyplot.legend()
+    pyplot.savefig('plots/loss2.png')
+    pyplot.close()
 
 
 def get_args():
@@ -135,8 +152,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    #net = UNet(n_channels=3, n_classes=1, bilinear=True)
-    net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
+    net = UNet(n_channels=3, n_classes=1, bilinear=True)
+    #net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
 
     if args.load:
         net.load_state_dict(
