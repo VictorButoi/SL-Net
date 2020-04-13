@@ -55,7 +55,12 @@ def train_net(net,
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
     criterion = nn.BCEWithLogitsLoss()
 
+    train_scores = []
+    train_variances = []
     val_scores = []
+    val_variances = []
+
+    sub_epoch_interval = (len(dataset) // (10 * batch_size))
 
     for epoch in range(epochs):
         net.train()
@@ -82,16 +87,20 @@ def train_net(net,
                 nn.utils.clip_grad_value_(net.parameters(), 0.1)
                 optimizer.step()
 
+                print(sub_epoch_interval)
+                print(sub_epoch_interval)
+                print(sub_epoch_interval)
+
                 pbar.update(imgs.shape[0])
                 global_step += 1
 
-                if global_step % (len(dataset) // (10 * batch_size)) == 0:
+                if global_step % sub_epoch_interval == 0:
                     for tag, value in net.named_parameters():
                         tag = tag.replace('.', '/')
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
                     
-                    val_score = eval_net(net, val_loader, device)
+                    val_score, val_variance = eval_net(net, val_loader, device)
 
                     val_scores.append(val_score)
                     

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import torch.nn.functional as F
 from tqdm import tqdm
 
@@ -11,6 +12,8 @@ def eval_net(net, loader, device):
     mask_type = torch.float32 if net.n_classes == 1 else torch.long
     n_val = len(loader)  # the number of batch
     tot = 0
+
+    dice_coeffs = []
 
     with tqdm(total=n_val, desc='Validation round', unit='batch', leave=False) as pbar:
         for batch in loader:
@@ -26,7 +29,10 @@ def eval_net(net, loader, device):
             else:
                 pred = torch.sigmoid(mask_pred)
                 pred = (pred > 0.5).float()
-                tot += dice_coeff(pred, true_masks).item()
+                pred_dice = dice_coeff(pred, true_masks).item()
+                tot += pred_dice
+                dice_coeffs.append(pred_dice)
+
             pbar.update()
 
-    return tot / n_val
+    return tot / n_val, np.var(dice_coeffs)
