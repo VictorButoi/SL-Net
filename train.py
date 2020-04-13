@@ -86,11 +86,7 @@ def train_net(net,
                 loss.backward()
                 nn.utils.clip_grad_value_(net.parameters(), 0.1)
                 optimizer.step()
-
-                print(sub_epoch_interval)
-                print(sub_epoch_interval)
-                print(sub_epoch_interval)
-
+                
                 pbar.update(imgs.shape[0])
                 global_step += 1
 
@@ -103,6 +99,7 @@ def train_net(net,
                     val_score, val_variance = eval_net(net, val_loader, device)
 
                     val_scores.append(val_score)
+                    val_variances.append(val_variance)
                     
                     scheduler.step(val_score)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
@@ -131,6 +128,7 @@ def train_net(net,
     pyplot.xlabel('Iteration Checkpoint')
     pyplot.ylabel('Dice')
     pyplot.plot(domain, val_scores, label="Test Dice")
+    pyplot.fill_between(x, val_scores + val_variances, y2=val_scores - val_variances)
     pyplot.legend()
     pyplot.savefig('plots/loss2.png')
     pyplot.close()
