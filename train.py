@@ -56,11 +56,12 @@ def train_net(net,
     criterion = nn.BCEWithLogitsLoss()
 
     train_scores = []
-    train_variances = []
     val_scores = []
-    val_variances = []
 
     sub_epoch_interval = (len(dataset) // (10 * batch_size))
+
+    running_train_loss = 0
+    running_train_losses = []
 
     for epoch in range(epochs):
         net.train()
@@ -79,6 +80,12 @@ def train_net(net,
                 loss = criterion(masks_pred, true_masks)
                 epoch_loss += loss.item()
 
+                pred = torch.sigmoid(masks_pred)
+                pred = (pred > 0.5).float()
+                pred_dice = dice_coeff(pred, true_masks)
+                running_train_loss += pred_dice.item()
+                running_train_losses.append(pred_dice.item())
+
                 writer.add_scalar('Loss/train', loss.item(), global_step)
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
@@ -86,7 +93,7 @@ def train_net(net,
                 loss.backward()
                 nn.utils.clip_grad_value_(net.parameters(), 0.1)
                 optimizer.step()
-                
+
                 pbar.update(imgs.shape[0])
                 global_step += 1
 
@@ -96,10 +103,13 @@ def train_net(net,
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
                     
-                    val_score, val_variance = eval_net(net, val_loader, device)
+                    val_score = eval_net(net, val_loader, device)
 
+                    train_scores.append(running_train_loss/sub_epoch_interval)
                     val_scores.append(val_score)
-                    val_variances.append(val_variance)
+
+                    running_train_loss = 0
+                    running_train_losses = []
                     
                     scheduler.step(val_score)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
@@ -123,21 +133,13 @@ def train_net(net,
 
     writer.close()
 
-    domain = range(len(train_scores))
-    pyplot.title('Percent Error v. Epoch Training Set')
-    pyplot.xlabel('Iteration Checkpoint')
-    pyplot.ylabel('Dice')
-    pyplot.plot(domain, val_scores, label="Test Dice")
-    pyplot.fill_between(x, val_scores + val_variances, y2=val_scores - val_variances)
-    pyplot.legend()
-    pyplot.savefig('plots/loss2.png')
-    pyplot.close()
+    return train_scores, val_scores
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-e', '--epochs', metavar='E', type=int, default=3,
+    parser.add_argument('-e', '--epochs', metavar='E', type=int, default=1,
                         help='Number of epochs', dest='epochs')
     parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=8,
                         help='Batch size', dest='batchsize')
@@ -145,7 +147,7 @@ def get_args():
                         help='Learning rate', dest='lr')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
-    parser.add_argument('-s', '--scale', dest='scale', type=float, default=0.1,
+    parser.add_argument('-s', '--scale', dest='scale', type=float, default=0.25,
                         help='Downscaling factor of the images')
     parser.add_argument('-v', '--validation', dest='val', type=float, default=10.0,
                         help='Percent of the data that is used as validation (0-100)')
@@ -159,8 +161,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    net = UNet(n_channels=3, n_classes=1, bilinear=True)
-    #net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
+    #net = UNet(n_channels=3, n_classes=1, bilinear=True)
+    net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
 
     if args.load:
         net.load_state_dict(
@@ -171,13 +173,69 @@ if __name__ == '__main__':
     net.to(device=device)
 
     try:
-        train_net(net=net,
-                  epochs=args.epochs,
-                  batch_size=args.batchsize,
-                  lr=args.lr,
-                  device=device,
-                  img_scale=args.scale,
-                  val_percent=args.val / 100)
+        nRuns = 1
+        overall_train_statistics = []
+        overall_eval_statistics = []
+
+        train_mean_scores = []
+        train_variances = []
+        val_mean_scores = []
+        val_variances = []
+
+        for i in range(nRuns):
+            train_scores, val_scores = train_net(net=net,
+                                                epochs=args.epochs,
+                                                batch_size=args.batchsize,
+                                                lr=args.lr,
+                                                device=device,
+                                                img_scale=args.scale,
+                                                val_percent=args.val / 100)
+            overall_train_statistics.append(train_scores)
+            overall_eval_statistics.append(val_scores)
+        
+        nRecords = len(overall_train_statistics[0])
+
+        for i in range(nRecords):
+            train_one_record = []
+            val_one_record = []
+            running_train = 0
+            running_val = 0
+
+            for j in range(nRuns):
+                eval_stat = overall_eval_statistics[j][i]
+                train_stat = overall_train_statistics[j][i]
+                running_val +=eval_stat
+                running_train += train_stat
+                val_one_record.append(eval_stat)
+                train_one_record.append(train_stat)
+
+            train_mean_scores.append(running_train/nRuns)
+            val_mean_scores.append(running_val/nRuns)
+            train_variances.append(np.std(train_one_record))
+            val_variances.append(np.std(val_one_record))
+        
+
+        eval_high_var = [a + b for a, b in zip(val_mean_scores, val_variances)]
+        eval_low_var = [a - b for a, b in zip(val_mean_scores, val_variances)]
+
+        train_high_var = [a + b for a, b in zip(train_mean_scores, train_variances)]
+        train_low_var = [a - b for a, b in zip(train_mean_scores, train_variances)]
+        
+        pyplot.title('Dice Loss v. Epoch Training Set over 10 runs')
+        pyplot.xlabel('Iteration Checkpoint')
+        pyplot.ylabel('Dice')
+
+        domain = range(len(val_mean_scores))
+        pyplot.plot(domain, val_mean_scores, label="Eval Dice", color="blue")
+        pyplot.fill_between(domain, eval_high_var, y2=eval_low_var, color="skyblue")
+
+        domain = range(len(train_mean_scores))
+        pyplot.plot(domain, train_mean_scores, label="Training Dice", color="orange")
+        pyplot.fill_between(domain, train_high_var, y2=train_low_var, color="navajowhite")
+
+        pyplot.legend()
+        pyplot.savefig('plots/total_loss_' + str(nRuns) + '.png')
+        pyplot.close()
     
     except KeyboardInterrupt:
         try:
