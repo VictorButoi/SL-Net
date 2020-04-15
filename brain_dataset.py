@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import os
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 from PIL import Image
 
 train_dir = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32/train/vols'
@@ -42,17 +44,23 @@ for vol in os.listdir(train_dir):
         aseg = aseg['vol_data'].astype('float32')
         onehot = get_onehot(aseg).numpy()
 
-        img = aseg[:,:,112]
-        mask = onehot[0,0,:,:,112]
+        bit_mask = onehot[0,0,:,:,112]
+
+        img = 255 * aseg[:,:,112]
+        mask = bit_mask.astype(int)
+
+        ones = np.ones(shape=mask.shape, dtype=int)
+
+        inverted_mask = (255 * np.bitwise_xor(mask,ones)).astype(float)
 
         im = Image.fromarray(img)
-        mask = Image.fromarray(mask)
+        inverted_mask = Image.fromarray(inverted_mask)
 
         im = im.convert("L")
-        mask = mask.convert("L")
+        inverted_mask = inverted_mask.convert("L")
         
         im.save("data/imgs/" + vol[:-4] + ".jpg")
-        mask.save("data/masks/" + vol[:-4] + ".png")
+        inverted_mask.save("data/masks/" + vol[:-4] + ".png")
 
         count+=1
         

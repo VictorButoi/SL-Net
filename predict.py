@@ -9,7 +9,7 @@ from PIL import Image
 from torchvision import transforms
 
 from unet import UNet
-from utils.dataset import BasicDataset
+from utils.dataset import BrainD
 
 
 def predict_img(net,
@@ -19,7 +19,7 @@ def predict_img(net,
                 out_threshold=0.5):
     net.eval()
 
-    img = torch.from_numpy(BasicDataset.preprocess(full_img, scale_factor))
+    img = torch.from_numpy(BrainD.preprocess(full_img, scale_factor))
 
     img = img.unsqueeze(0)
     img = img.to(device=device, dtype=torch.float32)
@@ -51,7 +51,7 @@ def predict_img(net,
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--model', '-m', default='checkpoints/CP_epoch3.pth',
+    parser.add_argument('--model', '-m', default='checkpoints/CP_epoch5.pth',
                         metavar='FILE',
                         help="Specify the file in which the model is stored")
     parser.add_argument('--input', '-i', metavar='INPUT', nargs='+',
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     in_files = args.input
     out_files = get_output_filenames(args)
 
-    net = UNet(n_channels=3, n_classes=1)
+    net = UNet(n_channels=1, n_classes=1)
 
     logging.info("Loading model {}".format(args.model))
 
