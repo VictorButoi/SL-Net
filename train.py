@@ -29,7 +29,8 @@ def train_net(net,
               val_percent=0.1,
               save_cp=True,
               img_scale=0.5):
-
+    
+    
     dataset = BasicDataset('data/imgs/', 'data/masks/', img_scale)
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
@@ -139,7 +140,7 @@ def train_net(net,
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-e', '--epochs', metavar='E', type=int, default=1,
+    parser.add_argument('-e', '--epochs', metavar='E', type=int, default=3,
                         help='Number of epochs', dest='epochs')
     parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=8,
                         help='Batch size', dest='batchsize')
@@ -161,8 +162,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    #net = UNet(n_channels=3, n_classes=1, bilinear=True)
-    net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
+    net = UNet(n_channels=3, n_classes=1, bilinear=True)
+    #net = TiedUNet(n_channels=3, n_classes=1, bilinear=True)
 
     if args.load:
         net.load_state_dict(
@@ -227,11 +228,11 @@ if __name__ == '__main__':
 
         domain = range(len(val_mean_scores))
         pyplot.plot(domain, val_mean_scores, label="Eval Dice", color="blue")
-        pyplot.fill_between(domain, eval_high_var, y2=eval_low_var, color="skyblue")
+        pyplot.fill_between(domain, eval_high_var, y2=eval_low_var, color="skyblue", alpha=0.5)
 
         domain = range(len(train_mean_scores))
         pyplot.plot(domain, train_mean_scores, label="Training Dice", color="orange")
-        pyplot.fill_between(domain, train_high_var, y2=train_low_var, color="navajowhite")
+        pyplot.fill_between(domain, train_high_var, y2=train_low_var, color="navajowhite", alpha=0.5)
 
         pyplot.legend()
         pyplot.savefig('plots/total_loss_' + str(nRuns) + '.png')
