@@ -31,7 +31,7 @@ def train_net(net,
               img_scale=0.5):
     
     
-    dataset = BrainD('data/imgs/', 'data/masks/', img_scale)
+    dataset = BrainD('data/imgs/', 'data/masks/', max_images=50, scale=img_scale)
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
