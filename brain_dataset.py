@@ -42,8 +42,8 @@ for vol in os.listdir(train_dir):
         aseg = aseg['vol_data'].astype('float32')
         onehot = get_onehot(aseg).numpy()
 
-        img = aseg[:,:,200]
-        mask = onehot[0,0,:,:,200]
+        img = aseg[:,:,112]
+        mask = onehot[0,0,:,:,112]
 
         im = Image.fromarray(img)
         mask = Image.fromarray(mask)
