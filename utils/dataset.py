@@ -19,7 +19,7 @@ class BrainD(Dataset):
             self.ids = [splitext(file)[0] for file in listdir(imgs_dir) if not file.startswith('.')]
         else:
             self.ids = []
-            for file, i in enumerate(listdir(imgs_dir)):
+            for i, file in enumerate(listdir(imgs_dir)):
                 if i < max_images:
                     if not file.startswith('.'):
                         self.ids.append(splitext(file)[0])

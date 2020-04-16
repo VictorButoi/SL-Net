@@ -4,7 +4,7 @@ import os
 import sys
 
 import numpy as np
-#from matplotlib import pyplot
+from matplotlib import pyplot
 import torch
 import torch.nn as nn
 from torch import optim
@@ -54,7 +54,7 @@ def train_net(net,
 
     optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
 
     train_scores = []
     val_scores = []
@@ -142,7 +142,7 @@ def get_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-e', '--epochs', metavar='E', type=int, default=5,
                         help='Number of epochs', dest='epochs')
-    parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=8,
+    parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=1,
                         help='Batch size', dest='batchsize')
     parser.add_argument('-l', '--learning-rate', metavar='LR', type=float, nargs='?', default=0.001,
                         help='Learning rate', dest='lr')
@@ -162,9 +162,9 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    #net = UNet(n_channels=1, n_classes=1, bilinear=True)
-    plot = False
-    net = TiedUNet(n_channels=1, n_classes=1, bilinear=True)
+    net = UNet(n_channels=1, n_classes=13, bilinear=True)
+    plot = True
+    #net = TiedUNet(n_channels=1, n_classes=13, bilinear=True)
 
     if args.load:
         net.load_state_dict(
@@ -196,7 +196,6 @@ if __name__ == '__main__':
             overall_eval_statistics.append(val_scores)
         
         if plot:
-            """
             nRecords = len(overall_train_statistics[0])
 
             for i in range(nRecords):
@@ -240,7 +239,6 @@ if __name__ == '__main__':
             pyplot.legend()
             pyplot.savefig('plots/total_loss_' + str(nRuns) + '.png')
             pyplot.close()
-            """
     
     except KeyboardInterrupt:
         try:
