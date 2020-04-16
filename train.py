@@ -4,7 +4,7 @@ import os
 import sys
 
 import numpy as np
-from matplotlib import pyplot
+#from matplotlib import pyplot
 import torch
 import torch.nn as nn
 from torch import optim
@@ -32,7 +32,7 @@ def train_net(net,
     
     
     dataset = BrainD('/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/', 
-                    '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/
+                    '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
                     , max_images=-1, scale=img_scale)
 
     n_val = int(len(dataset) * val_percent)
@@ -175,7 +175,7 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    net = UNet(n_channels=1, n_classes=13, bilinear=True)
+    net = UNet(n_channels=1, n_classes=14, bilinear=True)
     plot = True
     #net = TiedUNet(n_channels=1, n_classes=13, bilinear=True)
 
@@ -209,6 +209,7 @@ if __name__ == '__main__':
             overall_eval_statistics.append(val_scores)
         
         if plot:
+            """
             nRecords = len(overall_train_statistics[0])
 
             for i in range(nRecords):
@@ -252,6 +253,7 @@ if __name__ == '__main__':
             pyplot.legend()
             pyplot.savefig('plots/total_loss_' + str(nRuns) + '.png')
             pyplot.close()
+            """
     
     except KeyboardInterrupt:
         try:

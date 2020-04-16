@@ -9,7 +9,7 @@ from PIL import Image
 
 
 class BrainD(Dataset):
-    def __init__(self, imgs_dir, masks_dir, max_images=-1, scale=1):
+    def __init__(self, imgs_dir, masks_dir, inputT='npz', max_images=-1, scale=1):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
         self.scale = scale
@@ -27,6 +27,8 @@ class BrainD(Dataset):
                     break
         
         logging.info(f'Creating dataset with {len(self.ids)} examples')
+
+        self.load_npz = (inputT == 'npz')
 
     def __len__(self):
         return len(self.ids)
@@ -52,20 +54,29 @@ class BrainD(Dataset):
 
     def __getitem__(self, i):
         idx = self.ids[i]
-        mask_file = glob(self.masks_dir + idx + '*')
+        mask_file = glob(self.masks_dir + (idx[:-4] + "aseg") + '*')
         img_file = glob(self.imgs_dir + idx + '*')
+
+        print(mask_file)
+        print(img_file)
 
         assert len(mask_file) == 1, \
             f'Either no mask or multiple masks found for the ID {idx}: {mask_file}'
         assert len(img_file) == 1, \
             f'Either no image or multiple images found for the ID {idx}: {img_file}'
-        mask = Image.open(mask_file[0])
-        img = Image.open(img_file[0])
+        
+        if self.load_npz:
+            mask = np.load(mask_file[0]).numpy()
+            img = np.load(img_file[0]).numpy()
+            assert img.size == mask.size, \
+                f'Image and mask {idx} should be the same size, but are {img.shape} and {mask.shape}'
+        else:
+            mask = Image.open(mask_file[0])
+            img = Image.open(img_file[0])
+            assert img.size == mask.size, \
+                f'Image and mask {idx} should be the same size, but are {img.size} and {mask.size}'
 
-        assert img.size == mask.size, \
-            f'Image and mask {idx} should be the same size, but are {img.size} and {mask.size}'
-
-        img = self.preprocess(img, self.scale)
-        mask = self.preprocess(mask, self.scale)
+            img = self.preprocess(img, self.scale)
+            mask = self.preprocess(mask, self.scale)
 
         return {'image': torch.from_numpy(img), 'mask': torch.from_numpy(mask)}
