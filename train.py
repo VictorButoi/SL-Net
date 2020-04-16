@@ -31,7 +31,7 @@ def train_net(net,
               img_scale=0.5):
     
     
-    dataset = BrainD('data/imgs/', 'data/masks/', max_images=50, scale=img_scale)
+    dataset = BrainD('data/imgs/', 'data/masks/', max_images=-1, scale=img_scale)
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
@@ -54,7 +54,11 @@ def train_net(net,
 
     optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
-    criterion = nn.CrossEntropyLoss()
+    
+    if net.n_classes > 1:
+        criterion = nn.CrossEntropyLoss()
+    else:
+        criterion = nn.BCEWithLogitsLoss()
 
     train_scores = []
     val_scores = []
@@ -84,6 +88,7 @@ def train_net(net,
                 pred = torch.sigmoid(masks_pred)
                 pred = (pred > 0.5).float()
                 pred_dice = dice_coeff(pred, true_masks)
+
                 running_train_loss += pred_dice.item()
                 running_train_losses.append(pred_dice.item())
 
@@ -115,12 +120,17 @@ def train_net(net,
                     scheduler.step(val_score)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
-                    logging.info('Validation Dice Coeff: {}'.format(val_score))
-                    writer.add_scalar('Dice/test', val_score, global_step)
+                    if net.n_classes > 1:
+                        logging.info('Validation cross entropy: {}'.format(val_score))
+                        writer.add_scalar('Loss/test', val_score, global_step)
+                    else:
+                        logging.info('Validation Dice Coeff: {}'.format(val_score))
+                        writer.add_scalar('Dice/test', val_score, global_step)
 
                     writer.add_images('images', imgs, global_step)
-                    writer.add_images('masks/true', true_masks, global_step)
-                    writer.add_images('masks/pred', torch.sigmoid(masks_pred) > 0.5, global_step)
+                    if net.n_classes == 1:
+                        writer.add_images('masks/true', true_masks, global_step)
+                        writer.add_images('masks/pred', torch.sigmoid(masks_pred) > 0.5, global_step)
 
         if save_cp:
             try:
