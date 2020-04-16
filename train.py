@@ -31,7 +31,10 @@ def train_net(net,
               img_scale=0.5):
     
     
-    dataset = BrainD('data/imgs/', 'data/masks/', max_images=-1, scale=img_scale)
+    dataset = BrainD('/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/', 
+                    '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/
+                    , max_images=-1, scale=img_scale)
+
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
