@@ -7,9 +7,10 @@ from torch.utils.data import Dataset
 import logging
 from PIL import Image
 
+lookup_table ={0:0,1:1,2:2,7:3,13:4,14:5,16:6,18:7,22:8,23:9,28:10,32:11,35:12}
 
 class BrainD(Dataset):
-    def __init__(self, imgs_dir, masks_dir, inputT='npz', max_images=-1, scale=1):
+    def __init__(self, imgs_dir, masks_dir, label_numbers=None, inputT='npz', max_images=-1, scale=1):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
         self.scale = scale
@@ -29,6 +30,7 @@ class BrainD(Dataset):
         logging.info(f'Creating dataset with {len(self.ids)} examples')
 
         self.load_npz = (inputT == 'npz')
+        self.label_numbers = label_numbers
 
     def __len__(self):
         return len(self.ids)
@@ -54,11 +56,13 @@ class BrainD(Dataset):
 
     def __getitem__(self, i):
         idx = self.ids[i]
-        mask_file = glob(self.masks_dir + (idx[:-4] + "aseg") + '*')
-        img_file = glob(self.imgs_dir + idx + '*')
-
-        print(mask_file)
-        print(img_file)
+        
+        if self.load_npz:
+            mask_file = glob(self.masks_dir + (idx[:-4] + "aseg") + '*')
+            img_file = glob(self.imgs_dir + idx + '*')
+        else:
+            mask_file = glob(self.masks_dir + idx + '*')
+            img_file = glob(self.imgs_dir + idx + '*')
 
         assert len(mask_file) == 1, \
             f'Either no mask or multiple masks found for the ID {idx}: {mask_file}'
@@ -66,10 +70,20 @@ class BrainD(Dataset):
             f'Either no image or multiple images found for the ID {idx}: {img_file}'
         
         if self.load_npz:
-            mask = np.load(mask_file[0]).numpy()
-            img = np.load(img_file[0]).numpy()
+            mask = np.load(mask_file[0])['vol_data']
+            img = np.load(img_file[0])['vol_data']
             assert img.size == mask.size, \
                 f'Image and mask {idx} should be the same size, but are {img.shape} and {mask.shape}'
+
+            mask = mask[ np.newaxis, ...]
+            img = img[np.newaxis, ...]
+
+            if not self.label_numbers == None:
+                bad_labels = np.setdiff1d(np.unique(mask), self.label_numbers)
+                for label in bad_labels:
+                    mask[mask==label] = 0
+                for label in self.label_numbers:
+                    mask[mask==label] = lookup_table[label]
         else:
             mask = Image.open(mask_file[0])
             img = Image.open(img_file[0])

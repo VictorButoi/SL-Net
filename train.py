@@ -14,10 +14,14 @@ from eval import eval_net
 from unet import UNet
 from unet import TiedUNet
 from dice_loss import dice_coeff
+import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
 from utils.dataset import BrainD
 from torch.utils.data import DataLoader, random_split
+
+np.set_printoptions(threshold=sys.maxsize)
+torch.set_printoptions(threshold=5000)
 
 dir_checkpoint = 'checkpoints/'
 
@@ -29,11 +33,16 @@ def train_net(net,
               val_percent=0.3,
               save_cp=True,
               img_scale=0.5):
+
+    target_label_numbers = [0,1,2,7,13,14,16,18,22,23,28,32,35]
     
-    
+    """dataset = BrainD('/home/vib9/src/Pytorch-UNet/data/legacy/imgs_full_slice112/', 
+                    '/home/vib9/src/Pytorch-UNet/data/legacy/masks_full_slices112/',
+                    inputT='image',max_images=-1, scale=img_scale)"""
+        
     dataset = BrainD('/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/', 
-                    '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
-                    , max_images=-1, scale=img_scale)
+                    '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/',
+                    label_numbers=target_label_numbers, max_images=-1, scale=img_scale)
 
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
@@ -83,17 +92,23 @@ def train_net(net,
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 mask_type = torch.float32 if net.n_classes == 1 else torch.long
                 true_masks = true_masks.to(device=device, dtype=mask_type)
-
                 masks_pred = net(imgs)
+
+                if net.n_classes > 1: 
+                    true_masks = true_masks.squeeze(1)
+
                 loss = criterion(masks_pred, true_masks)
                 epoch_loss += loss.item()
 
-                pred = torch.sigmoid(masks_pred)
-                pred = (pred > 0.5).float()
-                pred_dice = dice_coeff(pred, true_masks)
+                if net.n_classes == 1: 
+                    pred = torch.sigmoid(masks_pred)
+                    pred = (pred > 0.5).float()
+                    pred_dice = dice_coeff(pred, true_masks).item()
+                else:
+                    pred_dice = F.cross_entropy(masks_pred, true_masks).item()
 
-                running_train_loss += pred_dice.item()
-                running_train_losses.append(pred_dice.item())
+                running_train_loss += pred_dice
+                running_train_losses.append(pred_dice)
 
                 writer.add_scalar('Loss/train', loss.item(), global_step)
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
@@ -153,7 +168,7 @@ def train_net(net,
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-e', '--epochs', metavar='E', type=int, default=5,
+    parser.add_argument('-e', '--epochs', metavar='E', type=int, default=1,
                         help='Number of epochs', dest='epochs')
     parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=1,
                         help='Batch size', dest='batchsize')
@@ -175,7 +190,7 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    net = UNet(n_channels=1, n_classes=14, bilinear=True)
+    net = UNet(n_channels=1, n_classes=13, bilinear=True)
     plot = True
     #net = TiedUNet(n_channels=1, n_classes=13, bilinear=True)
 
