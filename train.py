@@ -30,7 +30,7 @@ def train_net(net,
               epochs=5,
               batch_size=1,
               lr=0.001,
-              val_percent=0.3,
+              val_percent=0.1,
               save_cp=True,
               img_scale=0.5):
 
@@ -223,6 +223,9 @@ if __name__ == '__main__':
             overall_train_statistics.append(train_scores)
             overall_eval_statistics.append(val_scores)
         
+        print("Final training loss: " + str(overall_train_statistics[-1]))
+        print("Final eval loss: " + str(overall_eval_statistics[-1]))
+
         if plot:
             """
             nRecords = len(overall_train_statistics[0])
