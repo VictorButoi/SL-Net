@@ -193,9 +193,9 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    #net = UNet(n_channels=1, n_classes=13, bilinear=True)
+    net = UNet(n_channels=1, n_classes=13, bilinear=True)
     plot = True
-    net = TiedUNet(n_channels=1, n_classes=13, bilinear=True)
+    #net = TiedUNet(n_channels=1, n_classes=13, bilinear=True)
 
     if args.load:
         net.load_state_dict(
