@@ -24,18 +24,8 @@ def eval_net(net, loader, device, metric="DICE"):
             with torch.no_grad():
                 mask_pred = net(imgs) 
 
-            if net.n_classes > 1:
-                true_masks = true_masks.squeeze(1)
-                if metric=="CE":
-                    tot += F.cross_entropy(mask_pred, true_masks).item()
-                else:
-                    pred_dice = multi_dice_loss(mask_pred, true_masks).item()
-                    tot += pred_dice
-            else:
-                pred = torch.sigmoid(mask_pred)
-                pred = (pred > 0.5).float()
-                pred_dice = dice_coeff(pred, true_masks).item()
-                tot += pred_dice
+            pred_dice = dice_coeff(mask_pred, true_masks).item()
+            tot += pred_dice
 
             pbar.update()
 
