@@ -40,3 +40,26 @@ def dice_coeff(input, target):
         s = s + DiceCoeff().forward(c[0], c[1])
 
     return s / (i + 1)
+
+def multi_dice_loss(output, target):
+    """
+    output : NxCxHxW Variable
+    target :  NxHxW LongTensor
+    """
+    
+    eps = 0.0001
+
+    output = output.exp()
+    encoded_target = output.detach() * 0
+    encoded_target.scatter_(1, target.unsqueeze(1), 1)
+
+    weights = 1
+
+    intersection = output * encoded_target
+    numerator = 2 * intersection.sum(0).sum(1).sum(1)
+    denominator = output + encoded_target
+
+    denominator = denominator.sum(0).sum(1).sum(1) + eps
+    loss_per_channel = weights * (1 - (numerator / denominator))
+
+    return loss_per_channel.sum() / output.size(1)

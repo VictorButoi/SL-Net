@@ -14,6 +14,7 @@ from eval import eval_net
 from unet import UNet
 from unet import TiedUNet
 from dice_loss import dice_coeff
+from dice_loss import multi_dice_loss
 import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
@@ -95,9 +96,9 @@ def train_net(net,
                 masks_pred = net(imgs)
 
                 if net.n_classes > 1: 
-                    true_masks = true_masks.squeeze(1)
+                    squeezed_true_masks = true_masks.squeeze(1)
 
-                loss = criterion(masks_pred, true_masks)
+                loss = criterion(masks_pred, squeezed_true_masks)
                 epoch_loss += loss.item()
 
                 if net.n_classes == 1: 
@@ -105,7 +106,8 @@ def train_net(net,
                     pred = (pred > 0.5).float()
                     pred_dice = dice_coeff(pred, true_masks).item()
                 else:
-                    pred_dice = F.cross_entropy(masks_pred, true_masks).item()
+                    #pred_dice = F.cross_entropy(masks_pred, true_masks).item()
+                    pred_dice = multi_dice_loss(masks_pred, squeezed_true_masks).item()
 
                 running_train_loss += pred_dice
                 running_train_losses.append(pred_dice)
@@ -139,7 +141,8 @@ def train_net(net,
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
                     if net.n_classes > 1:
-                        logging.info('Validation cross entropy: {}'.format(val_score))
+                        logging.info('Multiclass dice: {}'.format(val_score))
+                        #logging.info('Validation cross entropy: {}'.format(val_score))
                         writer.add_scalar('Loss/test', val_score, global_step)
                     else:
                         logging.info('Validation Dice Coeff: {}'.format(val_score))
@@ -190,9 +193,9 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    net = UNet(n_channels=1, n_classes=13, bilinear=True)
+    #net = UNet(n_channels=1, n_classes=13, bilinear=True)
     plot = True
-    #net = TiedUNet(n_channels=1, n_classes=13, bilinear=True)
+    net = TiedUNet(n_channels=1, n_classes=13, bilinear=True)
 
     if args.load:
         net.load_state_dict(
@@ -223,8 +226,8 @@ if __name__ == '__main__':
             overall_train_statistics.append(train_scores)
             overall_eval_statistics.append(val_scores)
         
-        print("Final training loss: " + str(overall_train_statistics[-1]))
-        print("Final eval loss: " + str(overall_eval_statistics[-1]))
+        print("Final training loss: " + str(overall_train_statistics[-1][-1]))
+        print("Final eval loss: " + str(overall_eval_statistics[-1][-1]))
 
         if plot:
             """
