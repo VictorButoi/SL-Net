@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from dice_loss import dice_coeff
-from dice_loss import multi_dice_loss
 
 
 def eval_net(net, loader, device, metric="DICE"):

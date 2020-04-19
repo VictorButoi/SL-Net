@@ -14,7 +14,6 @@ from eval import eval_net
 from unet import UNet
 from unet import TiedUNet
 from dice_loss import dice_coeff
-from dice_loss import multi_dice_loss
 import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
