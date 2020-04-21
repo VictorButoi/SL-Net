@@ -16,8 +16,8 @@ def dice_coeff(pred, target):
     den = (pred*pred).sum(2) + (target*target).sum(2) + eps
     dice_loss = 1-num/den
     ind_avg = dice_loss
-    total_avg = torch.mean(dice_loss)
-    regions_avg = torch.mean(dice_loss, 0)
+    total_avg = torch.mean(dice_loss.float())
+    regions_avg = torch.mean(dice_loss.float(), 0)
     return total_avg, regions_avg, ind_avg
 
 def one_hot(targets, C):    
