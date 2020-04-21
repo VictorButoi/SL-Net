@@ -92,16 +92,15 @@ def train_net(net,
                 true_masks = true_masks.to(device=device, dtype=mask_type)
                 masks_pred = net(imgs)
 
-                loss = criterion(masks_pred, one_hot(true_masks, net.n_classes))
-                epoch_loss += loss.item()
+                loss = criterion(masks_pred, one_hot(true_masks, net.n_classes))[0]
+                loss_num = loss.item()
+                epoch_loss += loss_num
 
-                pred_dice = dice_coeff(pred, one_hot(true_masks, net.n_classes)).item()
+                running_train_loss += loss_num
+                running_train_losses.append(loss_num)
 
-                running_train_loss += pred_dice
-                running_train_losses.append(pred_dice)
-
-                writer.add_scalar('Loss/train', loss.item(), global_step)
-                pbar.set_postfix(**{'loss (batch)': loss.item()})
+                writer.add_scalar('Loss/train', loss_num, global_step)
+                pbar.set_postfix(**{'loss (batch)': loss_num})
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -161,7 +160,7 @@ def get_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-e', '--epochs', metavar='E', type=int, default=1,
                         help='Number of epochs', dest='epochs')
-    parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=1,
+    parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=8,
                         help='Batch size', dest='batchsize')
     parser.add_argument('-l', '--learning-rate', metavar='LR', type=float, nargs='?', default=0.001,
                         help='Learning rate', dest='lr')

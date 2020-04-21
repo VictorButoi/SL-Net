@@ -3,10 +3,8 @@ from torch.autograd import Function
 
 def dice_coeff(pred, target):
     eps = 1
-    print(pred.shape)
-    print(target.shape)
     
-    assert False, 'Input and target are different dim'
+    assert pred.size() == target.size(), 'Input and target are different dim'
     if len(target.size())==4:
         n,c,x,y = target.size()
     if len(target.size())==5:
@@ -22,7 +20,7 @@ def dice_coeff(pred, target):
     regions_avg = torch.mean(dice_loss, 0)
     return total_avg, regions_avg, ind_avg
 
-def one_hot(targets, C):   
+def one_hot(targets, C):    
     targets_extend=targets.clone()
     one_hot = torch.cuda.FloatTensor(targets_extend.size(0), C, targets_extend.size(2), targets_extend.size(3)).zero_()
     one_hot.scatter_(1, targets_extend, 1) 
