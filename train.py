@@ -14,6 +14,7 @@ from eval import eval_net
 from unet import UNet
 from unet import TiedUNet
 from dice_loss import dice_coeff
+from dice_loss import one_hot
 import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
@@ -67,7 +68,7 @@ def train_net(net,
     optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
     
-    criterion = dice_coeff()
+    criterion = dice_coeff
 
     train_scores = []
     val_scores = []
@@ -91,13 +92,10 @@ def train_net(net,
                 true_masks = true_masks.to(device=device, dtype=mask_type)
                 masks_pred = net(imgs)
 
-                if net.n_classes > 1: 
-                    squeezed_true_masks = true_masks.squeeze(1)
-
-                loss = criterion(masks_pred, squeezed_true_masks)
+                loss = criterion(masks_pred, one_hot(true_masks, net.n_classes))
                 epoch_loss += loss.item()
 
-                pred_dice = dice_coeff(pred, true_masks).item()
+                pred_dice = dice_coeff(pred, one_hot(true_masks, net.n_classes)).item()
 
                 running_train_loss += pred_dice
                 running_train_losses.append(pred_dice)
