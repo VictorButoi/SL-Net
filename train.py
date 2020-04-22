@@ -93,15 +93,14 @@ def train_net(net,
                 masks_pred = net(imgs)
 
                 loss = criterion(masks_pred, one_hot(true_masks, net.n_classes))[0]
-                loss_num = loss.item()
                 
-                epoch_loss += loss_num
+                epoch_loss += loss.item()
 
-                running_train_loss += loss_num
-                running_train_losses.append(loss_num)
+                running_train_loss += loss.item()
+                running_train_losses.append(loss.item())
 
-                writer.add_scalar('Loss/train', loss_num, global_step)
-                pbar.set_postfix(**{'loss (batch)': loss_num})
+                writer.add_scalar('Loss/train', loss.item(), global_step)
+                pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 optimizer.zero_grad()
                 loss.backward()
