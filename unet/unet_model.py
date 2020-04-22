@@ -14,6 +14,7 @@ class UNet(nn.Module):
         factor = 2 if bilinear else 1
 
         self.inc = DoubleConv(n_channels, 64)
+
         self.down1 = Down(64, 128)
         self.down2 = Down(128, 256)
         self.down3 = Down(256, 512)
@@ -24,6 +25,7 @@ class UNet(nn.Module):
         self.up4 = Up(128, 64 * factor, bilinear)
 
         self.outc = OutConv(64, n_classes)
+        self.out = nn.Softmax(dim=1)
 
     def forward(self, x):
         x1 = self.inc(x)
@@ -36,5 +38,5 @@ class UNet(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         x = self.outc(x)
-        x = F.softmax(x.reshape(x.size(0), x.size(1), -1), 2).view_as(x)
+        x = self.out(x)
         return x

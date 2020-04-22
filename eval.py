@@ -12,6 +12,8 @@ def eval_net(net, loader, device, metric="DICE"):
     mask_type = torch.float32 if net.n_classes == 1 else torch.long
     n_val = len(loader)  # the number of batch
     tot = 0
+    temp_boi = 0
+    temp_boi2 = 0
 
 
     with tqdm(total=n_val, desc='Validation round', unit='batch', leave=False) as pbar:
@@ -25,7 +27,11 @@ def eval_net(net, loader, device, metric="DICE"):
 
             pred = mask_pred.argmax(1).unsqueeze(1)
 
+            temp_boi = pred
+            temp_boi2 = true_masks
+
             pred_dice = dice_coeff(pred, true_masks)[0].item()
+
             tot += pred_dice
 
             pbar.update()

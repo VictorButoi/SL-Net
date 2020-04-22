@@ -94,6 +94,7 @@ def train_net(net,
 
                 loss = criterion(masks_pred, one_hot(true_masks, net.n_classes))[0]
                 loss_num = loss.item()
+                
                 epoch_loss += loss_num
 
                 running_train_loss += loss_num
