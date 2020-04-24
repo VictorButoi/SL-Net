@@ -22,6 +22,7 @@ class TiedUNet(nn.Module):
         self.super_up_layer = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
         self.outc = nn.Conv2d(64, n_classes, kernel_size=1)
+        self.sm = nn.Softmax(dim=1)
 
     
     def conv_seq(self, x, option='down'):
@@ -59,4 +60,5 @@ class TiedUNet(nn.Module):
             up_path.append(self.conv_seq(x, option='up'))
 
         logits = self.outc(up_path[-1])
-        return logits
+        out = self.sm(logits)
+        return out

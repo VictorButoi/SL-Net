@@ -16,6 +16,9 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.dataset import BrainD
 from torch.utils.data import DataLoader, random_split
 
+from dice_loss import dice_coeff
+from dice_loss import one_hot
+
 dir_img = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
 dir_mask = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
 dir_checkpoint = 'checkpoints/'
@@ -27,7 +30,8 @@ def train_net(net,
               lr=0.001,
               val_percent=0.1,
               save_cp=True,
-              img_scale=1):
+              img_scale=1,
+              dice=True):
 
     target_label_numbers = [0,2,3,4,10,16,17,28,31,41,42,43,49,53,63]
 
@@ -35,7 +39,7 @@ def train_net(net,
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
-    
+
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
     val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
 
@@ -57,7 +61,10 @@ def train_net(net,
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
 
     if net.n_classes > 1:
-        criterion = nn.CrossEntropyLoss()
+        if dice:
+            criterion = dice_coeff
+        else:
+            criterion = nn.CrossEntropyLoss()
     else:
         criterion = nn.BCEWithLogitsLoss()
 
@@ -76,9 +83,10 @@ def train_net(net,
 
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 mask_type = torch.float32 if net.n_classes == 1 else torch.long
-                true_masks = (true_masks.to(device=device, dtype=mask_type)).squeeze(1)
+                true_masks = one_hot(true_masks.to(device=device, dtype=mask_type), net.n_classes)
 
                 masks_pred = net(imgs)
+
                 loss = criterion(masks_pred, true_masks)
                 epoch_loss += loss.item()
                 writer.add_scalar('Loss/train', loss.item(), global_step)
