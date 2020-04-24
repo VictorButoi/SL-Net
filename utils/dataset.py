@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 import logging
 from PIL import Image
 
-lookup_table ={0:0,2:1,3:2,5:3,6:4,10:5}
+lookup_table ={0:0,2:1,3:2,4:3,10:4,16:5,17:6,28:7,31:8,41:9,42:10,43:11,49:12,53:13,63:14}
 
 class BrainD(Dataset):
     def __init__(self, imgs_dir, masks_dir, label_numbers=None, inputT='npz', max_images=-1, scale=1):
@@ -85,7 +85,8 @@ class BrainD(Dataset):
                     mask[mask==label] = 0
                 print(self.label_numbers)
                 for label in self.label_numbers:
-                    mask[mask==label] = lookup_table[label]
+                    if not label == 0:
+                        mask[mask==label] = lookup_table[label]
                 assert False, 'when down where you from'
         else:
             mask = Image.open(mask_file[0])

@@ -29,7 +29,7 @@ def train_net(net,
               save_cp=True,
               img_scale=1):
 
-    target_label_numbers = [2,3,4,10,16,17,28,31,41,42,43,49,53,63]
+    target_label_numbers = [0,2,3,4,10,16,17,28,31,41,42,43,49,53,63]
 
     dataset = BrainD(dir_img, dir_mask, label_numbers=target_label_numbers)
     n_val = int(len(dataset) * val_percent)
@@ -156,8 +156,8 @@ if __name__ == '__main__':
     #   - For 1 class and background, use n_classes=1
     #   - For 2 classes, use n_classes=1
     #   - For N > 2 classes, use n_classes=N
-    net = UNet(n_channels=1, n_classes=6, bilinear=True)
-    #net = TiedUNet(n_channels=1, n_classes=5, bilinear=True)
+    net = UNet(n_channels=1, n_classes=15, bilinear=True)
+    #net = TiedUNet(n_channels=1, n_classes=15, bilinear=True)
 
     logging.info(f'Network:\n'
                  f'\t{net.n_channels} input channels\n'
