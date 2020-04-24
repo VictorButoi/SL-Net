@@ -99,7 +99,6 @@ def train_net(net,
                 masks_pred = net(imgs)
 
                 loss = criterion(masks_pred, true_masks)
-                print(loss)
 
                 running_train_loss += loss.item()
                 epoch_loss += loss.item()
