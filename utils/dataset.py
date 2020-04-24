@@ -81,7 +81,7 @@ class BrainD(Dataset):
             if not self.label_numbers == None:
                 bad_labels = np.setdiff1d(np.unique(mask), self.label_numbers)
                 for label in bad_labels:
-                    mask[mask==label] = 0
+                    mask[mask==label and not(mask==0)] = 0
                 for label in self.label_numbers:
                     mask[mask==label] = lookup_table[label]
         else:

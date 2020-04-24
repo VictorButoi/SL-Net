@@ -18,7 +18,7 @@ def dice_coeff(pred, target):
     ind_avg = dice_loss
     total_avg = torch.mean(dice_loss.float())
     regions_avg = torch.mean(dice_loss.float(), 0)
-    return total_avg, regions_avg, ind_avg
+    return total_avg
 
 def one_hot(targets, C):    
     targets_extend=targets.clone()
