@@ -80,14 +80,11 @@ class BrainD(Dataset):
 
             if not self.label_numbers == None:
                 bad_labels = np.setdiff1d(np.unique(mask), self.label_numbers)
-                print(bad_labels)
                 for label in bad_labels:
                     mask[mask==label] = 0
-                print(self.label_numbers)
                 for label in self.label_numbers:
                     if not label == 0:
                         mask[mask==label] = lookup_table[label]
-                assert False, 'when down where you from'
         else:
             mask = Image.open(mask_file[0])
             img = Image.open(img_file[0])
