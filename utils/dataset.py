@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 import logging
 from PIL import Image
 
-lookup_table ={0:0,1:1,2:2,7:3,13:4,14:5,16:6,18:7,22:8,23:9,28:10,32:11,35:12}
+lookup_table ={0:0,2:1,3:2,5:3,6:4,10:5}
 
 class BrainD(Dataset):
     def __init__(self, imgs_dir, masks_dir, label_numbers=None, inputT='npz', max_images=-1, scale=1):

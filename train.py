@@ -22,7 +22,7 @@ from utils.dataset import BrainD
 from torch.utils.data import DataLoader, random_split
 
 np.set_printoptions(threshold=sys.maxsize)
-torch.set_printoptions(threshold=5000)
+torch.set_printoptions(threshold=10_000)
 
 dir_checkpoint = 'checkpoints/'
 
@@ -35,7 +35,7 @@ def train_net(net,
               save_cp=True,
               img_scale=0.5):
 
-    target_label_numbers = [0,1,2,7,13,14,16,18,22,23,28,32,35]
+    target_label_numbers = [0,2,3,5,6,10]
     
     """dataset = BrainD('/home/vib9/src/Pytorch-UNet/data/legacy/imgs_full_slice112/', 
                     '/home/vib9/src/Pytorch-UNet/data/legacy/masks_full_slices112/',
@@ -91,8 +91,9 @@ def train_net(net,
                 mask_type = torch.float32 if net.n_classes == 1 else torch.long
                 true_masks = true_masks.to(device=device, dtype=mask_type)
                 masks_pred = net(imgs)
-
-                loss = criterion(masks_pred, one_hot(true_masks, net.n_classes))[0]
+                true_masks = one_hot(true_masks, net.n_classes)
+               
+                loss = criterion(masks_pred,true_masks)[0]
                 
                 epoch_loss += loss.item()
 
@@ -160,7 +161,7 @@ def get_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-e', '--epochs', metavar='E', type=int, default=1,
                         help='Number of epochs', dest='epochs')
-    parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=8,
+    parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=1,
                         help='Batch size', dest='batchsize')
     parser.add_argument('-l', '--learning-rate', metavar='LR', type=float, nargs='?', default=0.001,
                         help='Learning rate', dest='lr')
@@ -180,9 +181,9 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    net = UNet(n_channels=1, n_classes=13, bilinear=True)
+    net = UNet(n_channels=1, n_classes=6, bilinear=True)
     plot = True
-    #net = TiedUNet(n_channels=1, n_classes=13, bilinear=True)
+    #net = TiedUNet(n_channels=1, n_classes=6, bilinear=True)
 
     if args.load:
         net.load_state_dict(
