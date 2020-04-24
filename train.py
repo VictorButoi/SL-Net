@@ -4,7 +4,6 @@ import os
 import sys
 
 import numpy as np
-#from matplotlib import pyplot
 import torch
 import torch.nn as nn
 from torch import optim
@@ -12,18 +11,13 @@ from tqdm import tqdm
 
 from eval import eval_net
 from unet import UNet
-from unet import TiedUNet
-from dice_loss import dice_coeff
-from dice_loss import one_hot
-import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
 from utils.dataset import BrainD
 from torch.utils.data import DataLoader, random_split
 
-np.set_printoptions(threshold=sys.maxsize)
-torch.set_printoptions(threshold=10_000)
-
+dir_img = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
+dir_mask = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
 dir_checkpoint = 'checkpoints/'
 
 def train_net(net,
@@ -33,32 +27,20 @@ def train_net(net,
               lr=0.001,
               val_percent=0.1,
               save_cp=True,
-              img_scale=0.5):
+              img_scale=1):
 
-    target_label_numbers = [0,2,3,5,6,10]
-    
-    """dataset = BrainD('/home/vib9/src/Pytorch-UNet/data/legacy/imgs_full_slice112/', 
-                    '/home/vib9/src/Pytorch-UNet/data/legacy/masks_full_slices112/',
-                    inputT='image',max_images=-1, scale=img_scale)"""
-        
-    """dataset = BrainD('/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/', 
-                    '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/',
-                    label_numbers=target_label_numbers, max_images=-1, scale=img_scale)"""
-    
-    dataset = BrainD('/home/vib9/src/Pytorch-UNet/data/overfit/imgs/', 
-                    '/home/vib9/src/Pytorch-UNet/data/overfit/masks/',
-                    label_numbers=target_label_numbers, max_images=-1, scale=img_scale)
+    target_label_numbers = [2,3,4,10,16,17,28,31,41,42,43,49,53,63]
 
+    dataset = BrainD(dir_img, dir_mask, label_numbers=target_label_numbers)
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
     val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
 
-    #writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_SCALE_{img_scale}')
+    writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_SCALE_{img_scale}')
     global_step = 0
 
-    """
     logging.info(f'''Starting training:
         Epochs:          {epochs}
         Batch size:      {batch_size}
@@ -69,73 +51,57 @@ def train_net(net,
         Device:          {device.type}
         Images scaling:  {img_scale}
     ''')
-    """
 
-    optim = torch.optim.Adam(net.parameters(), lr=lr)
-    
-    criterion = dice_coeff
-
-    #train_scores = []
-    #val_scores = []
-
-    #sub_epoch_interval = (len(dataset) // (10 * batch_size))
-
-    running_train_loss = 0
-    running_train_losses = []
-
-    net.train()
+    optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
+    if net.n_classes > 1:
+        criterion = nn.CrossEntropyLoss()
+    else:
+        criterion = nn.BCEWithLogitsLoss()
 
     for epoch in range(epochs):
+        net.train()
 
-        #with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
+        epoch_loss = 0
+        with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
+            for batch in train_loader:
+                imgs = batch['image']
+                true_masks = batch['mask']
+                assert imgs.shape[1] == net.n_channels, \
+                    f'Network has been defined with {net.n_channels} input channels, ' \
+                    f'but loaded images have {imgs.shape[1]} channels. Please check that ' \
+                    'the images are loaded correctly.'
 
-        for batch in train_loader:
-            imgs = batch['image']
-            true_masks = batch['mask']
-            imgs = imgs.to(device=device, dtype=torch.float32)
-            mask_type = torch.float32 if net.n_classes == 1 else torch.long
-            true_masks = true_masks.to(device=device, dtype=mask_type)
+                imgs = imgs.to(device=device, dtype=torch.float32)
+                mask_type = torch.float32 if net.n_classes == 1 else torch.long
+                true_masks = (true_masks.to(device=device, dtype=mask_type)).squeeze(1)
 
-            masks_pred = net(imgs)
-            true_masks = one_hot(true_masks, net.n_classes)
-            
-            loss = criterion(masks_pred,true_masks)
-            print(loss)
+                masks_pred = net(imgs)
+                loss = criterion(masks_pred, true_masks)
+                epoch_loss += loss.item()
+                writer.add_scalar('Loss/train', loss.item(), global_step)
 
-            #running_train_loss += loss.item()
-            #running_train_losses.append(loss.item())
-            optim.zero_grad()
+                pbar.set_postfix(**{'loss (batch)': loss.item()})
 
-            #writer.add_scalar('Loss/train', loss.item(), global_step)
-            #pbar.set_postfix(**{'loss (batch)': loss.item()})
+                optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_value_(net.parameters(), 0.1)
+                optimizer.step()
 
-            loss.backward()
-            optim.step()
+                pbar.update(imgs.shape[0])
+                global_step += 1
 
-            #pbar.update(imgs.shape[0])
-            #global_step += 1
-            
-            """
-                if global_step % sub_epoch_interval == 0:
+                if global_step % (len(dataset) // (10 * batch_size)) == 0:
                     for tag, value in net.named_parameters():
                         tag = tag.replace('.', '/')
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
-                    
                     val_score = eval_net(net, val_loader, device)
-
-                    train_scores.append(running_train_loss/sub_epoch_interval)
-                    val_scores.append(val_score)
-
-                    running_train_loss = 0
-                    running_train_losses = []
-                    
                     scheduler.step(val_score)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
                     if net.n_classes > 1:
-                        logging.info('Multiclass dice: {}'.format(val_score))
-                        #logging.info('Validation cross entropy: {}'.format(val_score))
+                        logging.info('Validation cross entropy: {}'.format(val_score))
                         writer.add_scalar('Loss/test', val_score, global_step)
                     else:
                         logging.info('Validation Dice Coeff: {}'.format(val_score))
@@ -144,7 +110,7 @@ def train_net(net,
                     writer.add_images('images', imgs, global_step)
                     if net.n_classes == 1:
                         writer.add_images('masks/true', true_masks, global_step)
-                        writer.add_images('masks/pred', masks_pred > 0.5, global_step)
+                        writer.add_images('masks/pred', torch.sigmoid(masks_pred) > 0.5, global_step)
 
         if save_cp:
             try:
@@ -155,21 +121,18 @@ def train_net(net,
             torch.save(net.state_dict(),
                        dir_checkpoint + f'CP_epoch{epoch + 1}.pth')
             logging.info(f'Checkpoint {epoch + 1} saved !')
-            """
 
-    #writer.close()
-
-    return train_scores, val_scores
+    writer.close()
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-e', '--epochs', metavar='E', type=int, default=100,
+    parser.add_argument('-e', '--epochs', metavar='E', type=int, default=5,
                         help='Number of epochs', dest='epochs')
     parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=1,
                         help='Batch size', dest='batchsize')
-    parser.add_argument('-l', '--learning-rate', metavar='LR', type=float, nargs='?', default=0.01,
+    parser.add_argument('-l', '--learning-rate', metavar='LR', type=float, nargs='?', default=0.001,
                         help='Learning rate', dest='lr')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
@@ -182,14 +145,24 @@ def get_args():
 
 
 if __name__ == '__main__':
-    #logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     args = get_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #logging.info(f'Using device {device}')
+    logging.info(f'Using device {device}')
 
+    # Change here to adapt to your data
+    # n_channels=3 for RGB images
+    # n_classes is the number of probabilities you want to get per pixel
+    #   - For 1 class and background, use n_classes=1
+    #   - For 2 classes, use n_classes=1
+    #   - For N > 2 classes, use n_classes=N
     net = UNet(n_channels=1, n_classes=6, bilinear=True)
-    plot = True
-    #net = TiedUNet(n_channels=1, n_classes=6, bilinear=True)
+    #net = TiedUNet(n_channels=1, n_classes=5, bilinear=True)
+
+    logging.info(f'Network:\n'
+                 f'\t{net.n_channels} input channels\n'
+                 f'\t{net.n_classes} output channels (classes)\n'
+                 f'\t{"Bilinear" if net.bilinear else "Transposed conv"} upscaling')
 
     if args.load:
         net.load_state_dict(
@@ -198,80 +171,12 @@ if __name__ == '__main__':
         logging.info(f'Model loaded from {args.load}')
 
     net.to(device=device)
+    # faster convolutions, but more memory
 
-    try:
-        nRuns = 1
-        overall_train_statistics = []
-        overall_eval_statistics = []
-
-        train_mean_scores = []
-        train_variances = []
-        val_mean_scores = []
-        val_variances = []
-
-        for i in range(nRuns):
-            train_scores, val_scores = train_net(net=net,
-                                                epochs=args.epochs,
-                                                batch_size=args.batchsize,
-                                                lr=args.lr,
-                                                device=device,
-                                                img_scale=args.scale,
-                                                val_percent=args.val / 100)
-            overall_train_statistics.append(train_scores)
-            overall_eval_statistics.append(val_scores)
-        
-        """
-        print("Final training loss: " + str(overall_train_statistics[-1][-1]))
-        print("Final eval loss: " + str(overall_eval_statistics[-1][-1]))
-
-        if plot:
-            nRecords = len(overall_train_statistics[0])
-
-            for i in range(nRecords):
-                train_one_record = []
-                val_one_record = []
-                running_train = 0
-                running_val = 0
-
-                for j in range(nRuns):
-                    eval_stat = overall_eval_statistics[j][i]
-                    train_stat = overall_train_statistics[j][i]
-                    running_val +=eval_stat
-                    running_train += train_stat
-                    val_one_record.append(eval_stat)
-                    train_one_record.append(train_stat)
-
-                train_mean_scores.append(running_train/nRuns)
-                val_mean_scores.append(running_val/nRuns)
-                train_variances.append(np.std(train_one_record))
-                val_variances.append(np.std(val_one_record))
-            
-
-            eval_high_var = [a + b for a, b in zip(val_mean_scores, val_variances)]
-            eval_low_var = [a - b for a, b in zip(val_mean_scores, val_variances)]
-
-            train_high_var = [a + b for a, b in zip(train_mean_scores, train_variances)]
-            train_low_var = [a - b for a, b in zip(train_mean_scores, train_variances)]
-            
-            pyplot.title('Dice Loss v. Epoch Training Set over 10 runs')
-            pyplot.xlabel('Iteration Checkpoint')
-            pyplot.ylabel('Dice')
-
-            domain = range(len(val_mean_scores))
-            pyplot.plot(domain, val_mean_scores, label="Eval Dice", color="blue")
-            pyplot.fill_between(domain, eval_high_var, y2=eval_low_var, color="skyblue", alpha=0.5)
-
-            domain = range(len(train_mean_scores))
-            pyplot.plot(domain, train_mean_scores, label="Training Dice", color="orange")
-            pyplot.fill_between(domain, train_high_var, y2=train_low_var, color="navajowhite", alpha=0.5)
-
-            pyplot.legend()
-            pyplot.savefig('plots/total_loss_' + str(nRuns) + '.png')
-            pyplot.close()
-        """
-    
-    except KeyboardInterrupt:
-        try:
-            sys.exit(0)
-        except SystemExit:
-            os._exit(0)
+    train_net(net=net,
+                epochs=args.epochs,
+                batch_size=args.batchsize,
+                lr=args.lr,
+                device=device,
+                img_scale=args.scale,
+                val_percent=args.val / 100)
