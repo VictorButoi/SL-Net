@@ -23,6 +23,9 @@ dir_img = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32
 dir_mask = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
 dir_checkpoint = 'checkpoints/'
 
+np.set_printoptions(threshold=sys.maxsize)
+torch.set_printoptions(threshold=10_000)
+
 def train_net(net,
               device,
               epochs=5,
@@ -67,6 +70,14 @@ def train_net(net,
             criterion = nn.CrossEntropyLoss()
     else:
         criterion = nn.BCEWithLogitsLoss()
+    
+    train_scores = []
+    val_scores = []
+
+    sub_epoch_interval = (len(dataset) // (10 * batch_size))
+
+    running_train_loss = 0
+    running_train_losses = []
 
     for epoch in range(epochs):
         net.train()
@@ -88,7 +99,11 @@ def train_net(net,
                 masks_pred = net(imgs)
 
                 loss = criterion(masks_pred, true_masks)
+                print(loss)
+
+                running_train_loss += loss.item()
                 epoch_loss += loss.item()
+
                 writer.add_scalar('Loss/train', loss.item(), global_step)
 
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
@@ -101,17 +116,23 @@ def train_net(net,
                 pbar.update(imgs.shape[0])
                 global_step += 1
 
-                if global_step % (len(dataset) // (10 * batch_size)) == 0:
+                if global_step % sub_epoch_interval == 0:
                     for tag, value in net.named_parameters():
                         tag = tag.replace('.', '/')
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
+
                     val_score = eval_net(net, val_loader, device)
+
+                    train_scores.append(running_train_loss/sub_epoch_interval)
+                    val_scores.append(val_score)
+                    running_train_loss = 0
+
                     scheduler.step(val_score)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
                     if net.n_classes > 1:
-                        logging.info('Validation cross entropy: {}'.format(val_score))
+                        logging.info('Validation Dice Loss: {}'.format(val_score))
                         writer.add_scalar('Loss/test', val_score, global_step)
                     else:
                         logging.info('Validation Dice Coeff: {}'.format(val_score))
@@ -133,6 +154,8 @@ def train_net(net,
             logging.info(f'Checkpoint {epoch + 1} saved !')
 
     writer.close()
+
+    return train_scores, val_scores
 
 
 def get_args():
@@ -183,10 +206,10 @@ if __name__ == '__main__':
     net.to(device=device)
     # faster convolutions, but more memory
 
-    train_net(net=net,
-                epochs=args.epochs,
-                batch_size=args.batchsize,
-                lr=args.lr,
-                device=device,
-                img_scale=args.scale,
-                val_percent=args.val / 100)
+    train_scores, val_scores = train_net(net=net,
+                                            epochs=args.epochs,
+                                            batch_size=args.batchsize,
+                                            lr=args.lr,
+                                            device=device,
+                                            img_scale=args.scale,
+                                            val_percent=args.val / 100)
