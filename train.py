@@ -80,11 +80,12 @@ def train_net(net,
     running_train_losses = []
 
     for epoch in range(epochs):
-        net.train()
 
         epoch_loss = 0
         with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
             for batch in train_loader:
+                net.train()
+                
                 imgs = batch['image']
                 true_masks = batch['mask']
                 assert imgs.shape[1] == net.n_channels, \
