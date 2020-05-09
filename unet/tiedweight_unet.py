@@ -10,7 +10,6 @@ class TiedUNet(nn.Module):
         self.n_classes = n_classes
         self.bilinear = bilinear
         
-        factor = 2 if bilinear else 1
         self.batch_norm = nn.BatchNorm2d(64)
         self.ReLU = nn.ReLU(inplace=True)
         self.maxPool = nn.MaxPool2d(2)
