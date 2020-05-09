@@ -21,7 +21,7 @@ def dice_coeff(pred, target):
     return total_avg
 
 def one_hot(targets, C):    
-    targets_extend=targets.clone()
+    targets_extend=targets.clone().long()
     one_hot = torch.cuda.FloatTensor(targets_extend.size(0), C, targets_extend.size(2), targets_extend.size(3)).zero_()
     one_hot.scatter_(1, targets_extend, 1) 
     return one_hot
