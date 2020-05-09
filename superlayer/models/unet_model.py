@@ -1,8 +1,8 @@
-""" Full assembly of the parts to form the complete network """
-
 import torch.nn.functional as F
+import sys
 
-from .unet_parts import *
+sys.path.append("../utils/")
+from unet_parts import *
 
 
 class UNet(nn.Module):

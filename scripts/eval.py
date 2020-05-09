@@ -3,7 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
+import sys
 
+sys.path.append("../superlayer/utils/")
 from dice_loss import dice_coeff
 
 

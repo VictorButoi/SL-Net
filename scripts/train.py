@@ -10,10 +10,13 @@ from torch import optim
 from tqdm import tqdm
 
 from eval import eval_net
-from unet import UNet
+sys.path.append("../superlayer/models/")
+from models import UNet
+from models import TiedUNet
 
 from torch.utils.tensorboard import SummaryWriter
-from utils.dataset import BrainD
+sys.path.append("../superlayer/utils/")
+from dataset import BrainD
 from torch.utils.data import DataLoader, random_split
 
 from dice_loss import dice_coeff
@@ -36,19 +39,16 @@ def train_net(net,
               save_cp=True,
               img_scale=1,
               dice=True,
-              checkpoint=0):
+              checkpoint=0,
+              target_label_numbers=None,
+              dataset=None,
+              train_loader=None,
+              val_loader=None,
+              writer=None):
 
-    target_label_numbers = [0,2,3,4,10,16,17,28,31,41,42,43,49,53,63]
-
-    dataset = BrainD(dir_img, dir_mask, label_numbers=target_label_numbers)
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
-    train, val = random_split(dataset, [n_train, n_val])
-
-    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
-
-    writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_SCALE_{img_scale}')
+    
     global_step = 0
 
     logging.info(f'''Starting training:
@@ -75,11 +75,14 @@ def train_net(net,
     
     train_scores = []
     val_scores = []
+    
+    train_vars = []
+    val_vars = []
+    
 
     sub_epoch_interval = (len(dataset) // (10 * batch_size))
 
     running_train_loss = 0
-    running_train_losses = []
 
     for epoch in range(epochs):
 
@@ -96,13 +99,14 @@ def train_net(net,
                     'the images are loaded correctly.'
 
                 imgs = imgs.to(device=device, dtype=torch.float32)
-                mask_type = torch.float32 if net.n_classes == 1 else torch.long
-                true_masks = one_hot(true_masks.to(device=device, dtype=mask_type), net.n_classes)
+                true_masks = true_masks.to(device=device, dtype=torch.float32)
+                one_hot_true_masks = one_hot(true_masks, net.n_classes)
 
                 masks_pred = net(imgs)
 
-                loss = criterion(masks_pred, true_masks)
-
+                loss = criterion(masks_pred, one_hot_true_masks)
+                
+                
                 running_train_loss += loss.item()
                 epoch_loss += loss.item()
 
@@ -124,7 +128,7 @@ def train_net(net,
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
 
-                    val_score = eval_net(net, val_loader, device)
+                    val_score, val_var = eval_net(net, val_loader, device)
 
                     train_scores.append(running_train_loss/sub_epoch_interval)
                     val_scores.append(val_score)
@@ -139,11 +143,6 @@ def train_net(net,
                     else:
                         logging.info('Validation Dice Coeff: {}'.format(val_score))
                         writer.add_scalar('Dice/test', val_score, global_step)
-
-                    writer.add_images('images', imgs, global_step)
-                    if net.n_classes == 1:
-                        writer.add_images('masks/true', true_masks, global_step)
-                        writer.add_images('masks/pred', torch.sigmoid(masks_pred) > 0.5, global_step)
 
         if save_cp:
             if checkpoint == 1:
@@ -165,7 +164,7 @@ def train_net(net,
 
     writer.close()
 
-    return train_scores, val_scores
+    return train_scores, val_scores, train_vars, val_vars
 
 
 def get_args():
@@ -193,11 +192,6 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    # Change here to adapt to your data
-    # n_channels=3 for RGB images
-    # n_classes is the number of probabilities you want to get per pixel
-    #   - For 1 class and background, use n_classes=1
-    #   - For 2 classes, use n_classes=1
     #   - For N > 2 classes, use n_classes=N
     net1 = UNet(n_channels=1, n_classes=15, bilinear=True)
     net2 = TiedUNet(n_channels=1, n_classes=15, bilinear=True)
