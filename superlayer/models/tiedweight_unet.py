@@ -12,6 +12,8 @@ class TiedUNet(nn.Module):
         self.n_classes = n_classes
         self.bilinear = bilinear
         
+        self.n_downsizes = 4
+        
         self.batch_norm = nn.BatchNorm2d(64)
         self.ReLU = nn.ReLU(inplace=True)
         self.maxPool = nn.MaxPool2d(2)
@@ -45,13 +47,13 @@ class TiedUNet(nn.Module):
 
         down_path = [x1]
 
-        for i in range(4):
+        for i in range(self.n_downsizes):
             down_path.append(self.conv_seq(down_path[-1]))
 
         up_path = [down_path[-1]]
-        for i in range(2,6):
+        for i in range(self.n_downsizes):
             x1 = up_path[-1]
-            x2 = down_path[-i]
+            x2 = down_path[-(i+2)]
             x1 = self.super_up_layer(x1)
             diffY = torch.tensor(x2.size()[2] - x1.size()[2])
             diffX = torch.tensor(x2.size()[3] - x1.size()[3])
