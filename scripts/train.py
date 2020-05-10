@@ -82,7 +82,7 @@ def train_net(net,
 
     sub_epoch_interval = (len(dataset) // (10 * batch_size))
 
-    running_train_loss = 0
+    running_train_losses = []
 
     for epoch in range(epochs):
 
@@ -105,10 +105,11 @@ def train_net(net,
                 masks_pred = net(imgs)
 
                 loss = criterion(masks_pred, one_hot_true_masks)
-                
-                
-                running_train_loss += loss.item()
                 epoch_loss += loss.item()
+                
+                pred = torch.argmax(masks_pred, axis=1).unsqueeze(1)
+                hard_loss = criterion(pred, true_masks)
+                running_train_losses.append(hard_loss.item())
 
                 writer.add_scalar('Loss/train', loss.item(), global_step)
 
@@ -130,9 +131,12 @@ def train_net(net,
 
                     val_score, val_var = eval_net(net, val_loader, device)
 
-                    train_scores.append(running_train_loss/sub_epoch_interval)
+                    train_scores.append(np.average(running_train_losses))
                     val_scores.append(val_score)
-                    running_train_loss = 0
+                    train_vars.append(np.var(running_train_losses))
+                    val_vars.append(val_var)
+                    
+                    running_train_loss = []
 
                     scheduler.step(val_score)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
