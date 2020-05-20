@@ -1,11 +1,13 @@
 from os.path import splitext
 from os import listdir
-import numpy as np
+import logging
 from glob import glob
+
+import numpy as np
+from PIL import Image
+
 import torch
 from torch.utils.data import Dataset
-import logging
-from PIL import Image
 
 lookup_table ={0:0,2:1,3:2,4:3,10:4,16:5,17:6,28:7,31:8,41:9,42:10,43:11,49:12,53:13,63:14}
 

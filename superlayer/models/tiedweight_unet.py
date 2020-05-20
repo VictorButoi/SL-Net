@@ -1,9 +1,7 @@
 import torch.nn.functional as F
 import sys
 
-sys.path.append("../utils/")
-from unet_parts import *
-
+from .unet_parts import *
 
 class TiedUNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):

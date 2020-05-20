@@ -9,18 +9,13 @@ import torch.nn as nn
 from torch import optim
 from tqdm import tqdm
 
-from eval import eval_net
-sys.path.append("../superlayer/models/")
-from models import UNet
-from models import TiedUNet
-
-from torch.utils.tensorboard import SummaryWriter
-sys.path.append("../superlayer/utils/")
-from dataset import BrainD
 from torch.utils.data import DataLoader, random_split
+from torch.utils.tensorboard import SummaryWriter
 
-from dice_loss import dice_coeff
-from dice_loss import one_hot
+sys.path.append("..")
+from superlayer.models import UNet, TiedUNet
+from superlayer.utils import BrainD, dice_coeff, one_hot
+from eval import eval_net
 
 dir_img = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
 dir_mask = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
@@ -29,6 +24,7 @@ dir_checkpoint_2 = 'checkpoints_2/'
 
 np.set_printoptions(threshold=sys.maxsize)
 torch.set_printoptions(threshold=10_000)
+
 
 def train_net(net,
               device,

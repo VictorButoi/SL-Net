@@ -5,8 +5,8 @@ from tqdm import tqdm
 import numpy as np
 import sys
 
-sys.path.append("../superlayer/utils/")
-from dice_loss import dice_coeff
+sys.path.append("..")
+from superlayer.utils import BrainD, dice_coeff, one_hot
 
 
 def eval_net(net, loader, device):

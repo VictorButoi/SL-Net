@@ -1,8 +1,7 @@
 import torch.nn.functional as F
 import sys
 
-sys.path.append("../utils/")
-from unet_parts import *
+from .unet_parts import *
 
 
 class UNet(nn.Module):
