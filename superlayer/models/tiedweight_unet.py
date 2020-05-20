@@ -4,25 +4,22 @@ import sys
 from .unet_parts import *
 
 class TiedUNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=True):
+    def __init__(self, in_channels, nshared, n_classes, enc_depth, bilinear=True):
         super(TiedUNet, self).__init__()
-        self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
+        self.n_downsizes = enc_depth
         
-        self.n_downsizes = 4
-        
-        self.batch_norm = nn.BatchNorm2d(64)
+        self.batch_norm = nn.BatchNorm2d(nshared)
         self.ReLU = nn.ReLU(inplace=True)
         self.maxPool = nn.MaxPool2d(2)
 
-        self.inc = DoubleConv(n_channels, 64)
+        self.inc = DoubleConv(in_channels, nshared)
 
-        self.super_down_layer = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.super_down_layer_double = nn.Conv2d(128, 64, kernel_size=3, padding=1)
+        self.super_down_layer = nn.Conv2d(nshared, nshared, kernel_size=3, padding=1)
+        self.super_down_layer_double = nn.Conv2d(2*nshared, nshared, kernel_size=3, padding=1)
         self.super_up_layer = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-
-        self.outc = nn.Conv2d(64, n_classes, kernel_size=1)
+        self.outc = nn.Conv2d(nshared, n_classes, kernel_size=1)
         self.sm = nn.Softmax(dim=1)
 
     

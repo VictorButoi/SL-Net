@@ -8,9 +8,9 @@ import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms
 
-from unet import UNet
-from utils.dataset import BrainD
-
+sys.path.append("..")
+from superlayer.utils import BrainD
+from superlayer.models import UNet
 
 def predict_img(net,
                 full_img,

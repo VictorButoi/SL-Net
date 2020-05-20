@@ -40,7 +40,21 @@ def train_net(net,
               dataset=None,
               train_loader=None,
               val_loader=None,
-              writer=None):
+              writer=None,
+              jupyterN=True):
+    
+    if not jupyterN:
+        target_label_numbers = [0,2,3,4,10,16,17,28,31,41,42,43,49,53,63]
+
+        dataset = BrainD(dir_img, dir_mask, label_numbers=target_label_numbers)
+        n_val = int(len(dataset) * val_percent)
+        n_train = len(dataset) - n_val
+        train, val = random_split(dataset, [n_train, n_val])
+
+        train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+        val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
+
+        writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_SCALE_{img_scale}')
 
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
@@ -89,10 +103,6 @@ def train_net(net,
 
                 imgs = batch['image']
                 true_masks = batch['mask']
-                assert imgs.shape[1] == net.n_channels, \
-                    f'Network has been defined with {net.n_channels} input channels, ' \
-                    f'but loaded images have {imgs.shape[1]} channels. Please check that ' \
-                    'the images are loaded correctly.'
 
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
@@ -108,7 +118,6 @@ def train_net(net,
                 running_train_losses.append(hard_loss.item())
 
                 writer.add_scalar('Loss/train', loss.item(), global_step)
-
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 optimizer.zero_grad()
@@ -120,10 +129,6 @@ def train_net(net,
                 global_step += 1
 
                 if global_step % sub_epoch_interval == 0:
-                    for tag, value in net.named_parameters():
-                        tag = tag.replace('.', '/')
-                        writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
-                        writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
 
                     val_score, val_var = eval_net(net, val_loader, device)
 
@@ -194,31 +199,38 @@ if __name__ == '__main__':
 
     #   - For N > 2 classes, use n_classes=N
     net1 = UNet(n_channels=1, n_classes=15, bilinear=True)
-    net2 = TiedUNet(n_channels=1, n_classes=15, bilinear=True)
+    net2 = TiedUNet(in_channels=1, nshared=64, n_classes=15, bilinear=True)
 
     logging.info(f'Network:\n'
-                 f'\t{net.n_channels} input channels\n'
-                 f'\t{net.n_classes} output channels (classes)\n'
-                 f'\t{"Bilinear" if net.bilinear else "Transposed conv"} upscaling')
+                 f'\t{net1.n_channels} input channels\n'
+                 f'\t{net1.n_classes} output channels (classes)\n'
+                 f'\t{"Bilinear" if net1.bilinear else "Transposed conv"} upscaling')
 
     net1.to(device=device)
     net2.to(device=device)
     # faster convolutions, but more memory
 
-    train_scores, val_scores = train_net(net=net1,
+    train_scores1, val_scores1, train_vars1, val_vars1 = train_net(net=net1,
                                             epochs=args.epochs,
                                             batch_size=args.batchsize,
                                             lr=args.lr,
                                             device=device,
                                             img_scale=args.scale,
                                             val_percent=args.val / 100,
-                                            checkpoint=1)
+                                            checkpoint=1,
+                                            jupyterN=False)
+
+    logging.info(f'Network:\n'
+                 f'\t{net2.n_channels} input channels\n'
+                 f'\t{net2.n_classes} output channels (classes)\n'
+                 f'\t{"Bilinear" if net2.bilinear else "Transposed conv"} upscaling')
     
-    train_scores, val_scores = train_net(net=net2,
+    train_scores2, val_scores2, train_vars2, val_vars2 = train_net(net=net2,
                                             epochs=args.epochs,
                                             batch_size=args.batchsize,
                                             lr=args.lr,
                                             device=device,
                                             img_scale=args.scale,
                                             val_percent=args.val / 100,
-                                            checkpoint=2)
+                                            checkpoint=2,
+                                            jupyterN=False)
