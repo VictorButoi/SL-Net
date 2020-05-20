@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 sys.path.append("..")
 from superlayer.models import UNet, TiedUNet
 from superlayer.utils import BrainD, dice_coeff, one_hot
-from eval import eval_net
+from validate import eval_net
 
 dir_img = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
 dir_mask = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
