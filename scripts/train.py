@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append("..")
-from superlayer.models import UNet, TiedUNet
+from superlayer.models import UNet, TiedUNet, SUnet
 from superlayer.utils import BrainD, dice_coeff, one_hot
 from validate import eval_net
 
@@ -197,20 +197,21 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
+    enc_nf = [4, 8, 16, 32]
+    dec_nf = [32, 16, 8, 4]
     #   - For N > 2 classes, use n_classes=N
-    net1 = UNet(n_channels=1, n_classes=15, bilinear=True)
-    net2 = TiedUNet(in_channels=1, nshared=64, n_classes=15, bilinear=True)
+    #net = UNet(n_channels=1, n_classes=15, bilinear=True)
+    #net = TiedUNet(in_channels=1, nshared=64, n_classes=15, enc_depth=4, bilinear=True)
+    net = SUnet(input_ch=1, use_bn=True, enc_nf=enc_nf, dec_nf=dec_nf)
 
     logging.info(f'Network:\n'
-                 f'\t{net1.n_channels} input channels\n'
-                 f'\t{net1.n_classes} output channels (classes)\n'
-                 f'\t{"Bilinear" if net1.bilinear else "Transposed conv"} upscaling')
+                 f'\t{net.n_channels} input channels\n'
+                 f'\t{net.n_classes} output channels (classes)\n'
+                 f'\t{"Bilinear" if net.bilinear else "Transposed conv"} upscaling')
 
-    net1.to(device=device)
-    net2.to(device=device)
-    # faster convolutions, but more memory
+    net.to(device=device)
 
-    train_scores1, val_scores1, train_vars1, val_vars1 = train_net(net=net1,
+    train_scores1, val_scores1, train_vars1, val_vars1 = train_net(net=net,
                                             epochs=args.epochs,
                                             batch_size=args.batchsize,
                                             lr=args.lr,
@@ -218,19 +219,4 @@ if __name__ == '__main__':
                                             img_scale=args.scale,
                                             val_percent=args.val / 100,
                                             checkpoint=1,
-                                            jupyterN=False)
-
-    logging.info(f'Network:\n'
-                 f'\t{net2.n_channels} input channels\n'
-                 f'\t{net2.n_classes} output channels (classes)\n'
-                 f'\t{"Bilinear" if net2.bilinear else "Transposed conv"} upscaling')
-    
-    train_scores2, val_scores2, train_vars2, val_vars2 = train_net(net=net2,
-                                            epochs=args.epochs,
-                                            batch_size=args.batchsize,
-                                            lr=args.lr,
-                                            device=device,
-                                            img_scale=args.scale,
-                                            val_percent=args.val / 100,
-                                            checkpoint=2,
                                             jupyterN=False)

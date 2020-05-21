@@ -6,6 +6,7 @@ from .unet_parts import *
 class TiedUNet(nn.Module):
     def __init__(self, in_channels, nshared, n_classes, enc_depth, bilinear=True):
         super(TiedUNet, self).__init__()
+        self.in_channels = in_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
         self.n_downsizes = enc_depth
