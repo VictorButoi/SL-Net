@@ -35,7 +35,7 @@ class SLNet(nn.Module):
         for i in range(self.depth-1):
             enc_seq.append(self.down_block(self.down(enc_seq[-1])))
         
-        x = enc_seq[-1]
+        x = self.down_block(self.down(enc_seq[-1]))
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         
         for i in range(self.depth):
