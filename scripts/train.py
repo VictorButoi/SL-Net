@@ -112,7 +112,7 @@ def train_net(net,
 
                 loss = criterion(masks_pred, one_hot_true_masks)
                 epoch_loss += loss.item()
-                
+
                 pred = torch.argmax(masks_pred, axis=1).unsqueeze(1)
                 hard_loss = criterion(pred, true_masks)
                 running_train_losses.append(hard_loss.item())
@@ -122,7 +122,6 @@ def train_net(net,
 
                 optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_value_(net.parameters(), 0.1)
                 optimizer.step()
 
                 pbar.update(imgs.shape[0])
@@ -136,7 +135,7 @@ def train_net(net,
                     val_scores.append(val_score)
                     train_vars.append(np.var(running_train_losses))
                     val_vars.append(val_var)
-                    
+
                     running_train_loss = []
 
                     scheduler.step(val_score)
