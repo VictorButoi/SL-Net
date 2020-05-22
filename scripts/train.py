@@ -201,7 +201,7 @@ if __name__ == '__main__':
     #   - For N > 2 classes, use n_classes=N
     #net = UNet(n_channels=1, n_classes=15, bilinear=True)
     #net = TiedUNet(in_channels=1, nshared=64, n_classes=15, enc_depth=4, bilinear=True)
-    net = SUnet(input_ch=1, use_bn=True, enc_nf=enc_nf, dec_nf=dec_nf)
+    net = SLNet(input_ch=1, out_ch=15, use_bn=True, superblock_size=64, depth=4)
 
     logging.info(f'Network:\n'
                  f'\t{net.n_channels} input channels\n'
