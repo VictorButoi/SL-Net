@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.autograd import Function
 
 
-class SUnet(nn.Module):
+class AEnet(nn.Module):
     def __init__(self, input_ch, out_ch, use_bn, enc_nf, dec_nf, ignore_last=False):
         super(SUnet, self).__init__()
         
@@ -46,21 +46,16 @@ class SUnet(nn.Module):
         
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         
-        x = torch.cat([x, x3], 1)
-        
         x = self.block5(x)
         
         x = F.interpolate(x, scale_factor=2, mode='nearest')
  
-        x = torch.cat([x, x2], 1)
         x = self.block6(x)
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         
-        x = torch.cat([x, x1], 1)
         x = self.block7(x)
         x = F.interpolate(x, scale_factor=2, mode='nearest')
 
-        x = torch.cat([x, x0], 1)
         x = self.block8(x)
         
         out = self.out_conv(x)
