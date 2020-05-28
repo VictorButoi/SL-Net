@@ -10,10 +10,10 @@ from torch.autograd import Function
 from .unet_parts import simple_block
 
 
-class SL_AENet(nn.Module):
+class SL_AEnet(nn.Module):
     
     def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth):
-        super(SL_AENet, self).__init__()
+        super(SL_AEnet, self).__init__()
         
         self.depth = depth
         self.n_classes = out_ch
