@@ -41,7 +41,9 @@ def train_net(net,
               train_loader=None,
               val_loader=None,
               writer=None,
-              jupyterN=True):
+              jupyterN=True,
+              train_path=None,
+              val_path=None):
     
     if not jupyterN:
         target_label_numbers = [0,2,3,4,10,16,17,28,31,41,42,43,49,53,63]
@@ -55,6 +57,12 @@ def train_net(net,
         val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
 
         writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_SCALE_{img_scale}')
+    
+    if not(train_path == None or val_path == None):
+        train = BrainD(dir_img, dir_mask, id_file=train_path, label_numbers=target_label_numbers)
+        val = BrainD(dir_img, dir_mask, id_file=val_path, label_numbers=target_label_numbers)
+        train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+        val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
 
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
