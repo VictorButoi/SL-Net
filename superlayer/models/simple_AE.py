@@ -10,7 +10,7 @@ from torch.autograd import Function
 
 class AEnet(nn.Module):
     def __init__(self, input_ch, out_ch, use_bn, enc_nf, dec_nf, ignore_last=False):
-        super(SUnet, self).__init__()
+        super(AEnet, self).__init__()
         
         self.n_classes = out_ch
         self.ignore_last = ignore_last

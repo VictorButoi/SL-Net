@@ -13,7 +13,7 @@ from .unet_parts import simple_block
 class SL_AENet(nn.Module):
     
     def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth):
-        super(SLNet, self).__init__()
+        super(SL_AENet, self).__init__()
         
         self.depth = depth
         self.n_classes = out_ch
