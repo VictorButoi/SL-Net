@@ -23,10 +23,10 @@ class AEnet(nn.Module):
 
         self.block4 = simple_block(enc_nf[3], dec_nf[0], use_bn)    
         
-        self.block5 = simple_block(dec_nf[0]*2, dec_nf[1], use_bn)       
-        self.block6 = simple_block(dec_nf[1]*2, dec_nf[2], use_bn)         
-        self.block7 = simple_block(dec_nf[2]*2, dec_nf[3], use_bn) 
-        self.block8 = simple_block(dec_nf[3]*2, dec_nf[3],    use_bn)           
+        self.block5 = simple_block(dec_nf[0], dec_nf[1], use_bn)       
+        self.block6 = simple_block(dec_nf[1], dec_nf[2], use_bn)         
+        self.block7 = simple_block(dec_nf[2], dec_nf[3], use_bn) 
+        self.block8 = simple_block(dec_nf[3], dec_nf[3],    use_bn)           
 
         self.out_conv = nn.Conv2d(dec_nf[3], out_ch, kernel_size=3, padding=1)
         self.sm = nn.Softmax(dim=1)
