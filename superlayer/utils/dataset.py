@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 lookup_table ={0:0,2:1,3:2,4:3,10:4,16:5,17:6,28:7,31:8,41:9,42:10,43:11,49:12,53:13,63:14}
 
 class BrainD(Dataset):
-    def __init__(self, imgs_dir, masks_dir, id_file=None, label_numbers=None, inputT='npz', max_images=-1, scale=1):
+    def __init__(self, imgs_dir, masks_dir, id_file=None, label_numbers=None, inputT='npz', scale=1):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
         self.scale = scale
@@ -20,19 +20,12 @@ class BrainD(Dataset):
         self.ids = []
         
         if id_file == None:
-            if max_images == -1:
-                self.ids = [splitext(file)[0] for file in listdir(imgs_dir) if not file.startswith('.')]
-            else:
-                for i, file in enumerate(listdir(imgs_dir)):
-                    if i < max_images:
-                        if not file.startswith('.'):
-                            self.ids.append(splitext(file)[0])
-                    else:
-                        break
+            self.ids = [splitext(file)[0] for file in listdir(imgs_dir) if not file.startswith('.')]
         else:
-            with open(id_file) as id_file:
+            with open(id_file) as id_file: 
                 for line in id_file:
-                    self.ids.append(line)
+                    if not line.startswith('.'):
+                        self.ids.append(line[:-1])
             
         
         logging.info(f'Creating dataset with {len(self.ids)} examples')

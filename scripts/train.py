@@ -63,9 +63,13 @@ def train_net(net,
         val = BrainD(dir_img, dir_mask, id_file=val_path, label_numbers=target_label_numbers)
         train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
         val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
-
-    n_val = int(len(dataset) * val_percent)
-    n_train = len(dataset) - n_val
+        n_val = len(val)
+        n_train = len(train)
+        dataset_size = n_val + n_train
+    else:
+        n_val = int(len(dataset) * val_percent)
+        n_train = len(dataset) - n_val
+        dataset_size = n_val + n_train
     
     global_step = 0
 
@@ -98,7 +102,7 @@ def train_net(net,
     val_vars = []
     
 
-    sub_epoch_interval = (len(dataset) // (10 * batch_size))
+    sub_epoch_interval = (dataset_size // (10 * batch_size))
 
     running_train_losses = []
 
