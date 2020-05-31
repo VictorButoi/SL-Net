@@ -34,7 +34,7 @@ class SL_AEnet(nn.Module):
         for i in range(self.depth-1):
             enc_seq.append(self.univ_block(self.down(enc_seq[-1])))
         
-        x = self.down_block(self.down(enc_seq[-1]))
+        x = self.univ_block(self.down(enc_seq[-1]))
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         
         for i in range(self.depth):
