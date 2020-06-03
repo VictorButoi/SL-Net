@@ -76,20 +76,22 @@ class OutConv(nn.Module):
     
     
 class simple_block(nn.Module):
-    def __init__(self, in_channels, out_channels, use_bn):
+    def __init__(self, in_channels, out_channels, use_bn, weight=None):
         super(simple_block, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        
+        self.W = weight
         self.use_bn= use_bn
-        
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
         self.bn1 = nn.InstanceNorm2d(out_channels)  
         self.activation = nn.ReLU()
 
     def forward(self, x):
-        out = self.conv1(x)
+        if not self.W == None:
+            out = F.conv2d(x, self.W, padding=1)
+        else:  
+            out = self.conv1(x)
         if self.use_bn:
             out = self.bn1(out)
         out = self.activation(out)

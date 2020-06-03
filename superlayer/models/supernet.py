@@ -8,22 +8,28 @@ import torch.nn.functional as F
 from torch.autograd import Function
 
 from .unet_parts import simple_block
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-
-class SLNet(nn.Module):
+class SuperNet(nn.Module):
     
     def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth):
-        super(SLNet, self).__init__()
+        super(SuperNet, self).__init__()
         
         self.depth = depth
         self.n_classes = out_ch
         self.down = torch.nn.MaxPool2d(2,2)
+        half_size = int(superblock_size/2)
+        
+        #Kernel size is 3
+        W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
+        hW = W[:,:half_size,:,:]
+        W.requires_grad = True
 
-        self.block0 = simple_block(input_ch , superblock_size, use_bn)   
-        self.down_block = simple_block(superblock_size, superblock_size, use_bn)
-        self.up_block = simple_block(2*superblock_size, superblock_size, use_bn)
+        self.block0 = simple_block(input_ch , half_size, use_bn)   
+        self.down_block = simple_block(half_size, half_size, use_bn, weight=hW)
+        self.up_block = simple_block(superblock_size, half_size, use_bn, weight=W)
 
-        self.out_conv = nn.Conv2d(superblock_size, out_ch, kernel_size=3, padding=1)
+        self.out_conv = nn.Conv2d(half_size, out_ch, kernel_size=3, padding=1)
         self.sm = nn.Softmax(dim=1)
 
         
