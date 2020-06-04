@@ -21,13 +21,13 @@ class SuperNet(nn.Module):
         half_size = int(superblock_size/2)
         
         #Kernel size is 3
-        W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
-        hW = W[:,:half_size,:,:]
-        W.requires_grad = True
+        self.W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
+        hW = self.W[:,:half_size,:,:]
+        self.W.requires_grad = True
 
         self.block0 = simple_block(input_ch , half_size, use_bn)   
         self.down_block = simple_block(half_size, half_size, use_bn, weight=hW)
-        self.up_block = simple_block(superblock_size, half_size, use_bn, weight=W)
+        self.up_block = simple_block(superblock_size, half_size, use_bn, weight=self.W)
 
         self.out_conv = nn.Conv2d(half_size, out_ch, kernel_size=3, padding=1)
         self.sm = nn.Softmax(dim=1)

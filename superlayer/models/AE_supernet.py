@@ -20,11 +20,11 @@ class AESuperNet(nn.Module):
         self.down = torch.nn.MaxPool2d(2,2)
         
         #Kernel size is 3
-        W = torch.nn.Parameter(torch.randn(superblock_size, superblock_size,3,3))
-        W.requires_grad = True
+        self.W = torch.nn.Parameter(torch.randn(superblock_size, superblock_size,3,3))
+        self.W.requires_grad = True
 
         self.block0 = simple_block(input_ch , superblock_size, use_bn)   
-        self.super_block = simple_block(superblock_size, superblock_size, use_bn, weight=W)
+        self.super_block = simple_block(superblock_size, superblock_size, use_bn, weight=self.W)
 
         self.out_conv = nn.Conv2d(superblock_size, out_ch, kernel_size=3, padding=1)
         self.sm = nn.Softmax(dim=1)
