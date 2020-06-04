@@ -16,6 +16,7 @@ class SUnet(nn.Module):
         
         hW = W
         if not W is None:
+            print(W.shape)
             W = torch.from_numpy(W).cuda()
             W.requires_grad=False
             
