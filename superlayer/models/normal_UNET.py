@@ -9,24 +9,31 @@ from torch.autograd import Function
 
 
 class SUnet(nn.Module):
-    def __init__(self, input_ch, out_ch, use_bn, enc_nf, dec_nf, ignore_last=False):
+    def __init__(self, input_ch, out_ch, use_bn, enc_nf, dec_nf, ignore_last=False, W=None):
         super(SUnet, self).__init__()
+        
+        hW = W:
+        if not W==None:
+            second_dim = W.shape[1]
+            hW = W[:,:int(second_dim/2),:,:]
+            
         
         self.n_classes = out_ch
         self.ignore_last = ignore_last
         self.down = torch.nn.MaxPool2d(2,2)
 
         self.block0 = simple_block(input_ch , enc_nf[0], use_bn)
-        self.block1 = simple_block(enc_nf[0], enc_nf[1], use_bn)
-        self.block2 = simple_block(enc_nf[1], enc_nf[2], use_bn)
-        self.block3 = simple_block(enc_nf[2], enc_nf[3], use_bn)
-
-        self.block4 = simple_block(enc_nf[3], dec_nf[0], use_bn)    
         
-        self.block5 = simple_block(dec_nf[0]*2, dec_nf[1], use_bn)       
-        self.block6 = simple_block(dec_nf[1]*2, dec_nf[2], use_bn)         
-        self.block7 = simple_block(dec_nf[2]*2, dec_nf[3], use_bn) 
-        self.block8 = simple_block(dec_nf[3]*2, dec_nf[3],    use_bn)           
+        
+        self.block1 = simple_block(enc_nf[0], enc_nf[1], use_bn, weight=hW)
+        self.block2 = simple_block(enc_nf[1], enc_nf[2], use_bn, weight=hW)
+        self.block3 = simple_block(enc_nf[2], enc_nf[3], use_bn, weight=hW)
+        self.block4 = simple_block(enc_nf[3], dec_nf[0], use_bn, weight=hW)    
+        
+        self.block5 = simple_block(dec_nf[0]*2, dec_nf[1], use_bn, weight=W)       
+        self.block6 = simple_block(dec_nf[1]*2, dec_nf[2], use_bn, weight=W)         
+        self.block7 = simple_block(dec_nf[2]*2, dec_nf[3], use_bn, weight=W) 
+        self.block8 = simple_block(dec_nf[3]*2, dec_nf[3], use_bn, weight=W)           
 
         self.out_conv = nn.Conv2d(dec_nf[3], out_ch, kernel_size=3, padding=1)
         self.sm = nn.Softmax(dim=1)

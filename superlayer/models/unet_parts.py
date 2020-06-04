@@ -82,7 +82,9 @@ class simple_block(nn.Module):
         self.out_channels = out_channels
         self.W = weight
         self.use_bn= use_bn
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        
+        if weight==None:
+            self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
         self.bn1 = nn.InstanceNorm2d(out_channels)  
         self.activation = nn.ReLU()
