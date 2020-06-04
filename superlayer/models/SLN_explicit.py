@@ -12,7 +12,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 class SuperNet(nn.Module):
     
-    def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth):
+    def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth, W=None):
         super(SuperNet, self).__init__()
         
         self.depth = depth
@@ -21,7 +21,11 @@ class SuperNet(nn.Module):
         half_size = int(superblock_size/2)
         
         #Kernel size is 3
-        self.W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
+        if W==None:
+            self.W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
+        else:
+            self.W = W
+            
         hW = self.W[:,:half_size,:,:]
         self.W.requires_grad = True
 

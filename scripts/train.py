@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append("..")
-from superlayer.models import UNet, TiedUNet, SUnet
+from superlayer.models import SUnet
 from superlayer.utils import BrainD, dice_coeff, one_hot
 from validate import eval_net
 
@@ -210,9 +210,7 @@ if __name__ == '__main__':
 
     enc_nf = [4, 8, 16, 32]
     dec_nf = [32, 16, 8, 4]
-    #   - For N > 2 classes, use n_classes=N
-    #net = UNet(n_channels=1, n_classes=15, bilinear=True)
-    #net = TiedUNet(in_channels=1, nshared=64, n_classes=15, enc_depth=4, bilinear=True)
+    
     net = SLNet(input_ch=1, out_ch=15, use_bn=True, superblock_size=64, depth=4)
 
     logging.info(f'Network:\n'
