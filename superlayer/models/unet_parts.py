@@ -83,14 +83,14 @@ class simple_block(nn.Module):
         self.W = weight
         self.use_bn= use_bn
         
-        if weight==None:
+        if weight is None:
             self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
         self.bn1 = nn.InstanceNorm2d(out_channels)  
         self.activation = nn.ReLU()
 
     def forward(self, x):
-        if not self.W == None:
+        if not self.W is None:
             out = F.conv2d(x, self.W, padding=1)
         else:  
             out = self.conv1(x)

@@ -7,15 +7,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Function
 
+from .unet_parts import simple_block
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 class SUnet(nn.Module):
     def __init__(self, input_ch, out_ch, use_bn, enc_nf, dec_nf, ignore_last=False, W=None):
         super(SUnet, self).__init__()
         
-        hW = W:
-        if not W==None:
+        hW = W
+        if not W is None:
+            W = torch.from_numpy(W).cuda()
+            W.requires_grad=False
+            
             second_dim = W.shape[1]
-            hW = W[:,:int(second_dim/2),:,:]
+            hW = W[:,:int(second_dim/2),:,:].cuda()
+            hW.requires_grad=False
             
         
         self.n_classes = out_ch
@@ -73,24 +79,4 @@ class SUnet(nn.Module):
         out = self.out_conv(x)
         out = self.sm(out)
         
-        return out
-
-class simple_block(nn.Module):
-    def __init__(self, in_channels, out_channels, use_bn):
-        super(simple_block, self).__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        
-        self.use_bn= use_bn
-        
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
-
-        self.bn1 = nn.InstanceNorm2d(out_channels)  
-        self.activation = nn.ReLU()
-
-    def forward(self, x):
-        out = self.conv1(x)
-        if self.use_bn:
-            out = self.bn1(out)
-        out = self.activation(out)
         return out

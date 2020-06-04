@@ -12,7 +12,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 class AESuperNet(nn.Module):
     
-    def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth, W==None):
+    def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth, W=None):
         super(AESuperNet, self).__init__()
         
         self.depth = depth
