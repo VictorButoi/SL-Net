@@ -26,7 +26,7 @@ np.set_printoptions(threshold=sys.maxsize)
 torch.set_printoptions(threshold=10_000)
 
 
-def train_net(net,
+def train_block(net,
               device,
               epochs=5,
               batch_size=1,

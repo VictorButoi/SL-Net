@@ -47,35 +47,24 @@ class SuperNet(nn.Module):
         if not learned_weight is None:
             half_size = int(self.superblock_size/2)
             half_learned_weight = learned_weight[:,:half_size,:,:]
-            custom_conv_down = simple_block(half_size, half_size, use_bn, weight=half_learned_weight
-            custom_conv_up = simple_block(self.superblock_size, half_size, use_bn, weight=learned_weight)
+            self.down_block = simple_block(half_size, half_size, use_bn, weight=half_learned_weight)
+            self.up_block = simple_block(self.superblock_size, half_size, use_bn, weight=learned_weight)
             
         #Model
         enc_seq = [self.block0(x_in)]
         
         for i in range(self.depth-1):
-            
-            if learned_weight is None:
-                x = self.down_block(self.down(enc_seq[-1]))
-            else:
-                x = custom_conv_down(self.down(enc_seq[-1]))
+            x = self.down_block(self.down(enc_seq[-1]))
                                                   
             enc_seq.append(x)
         
-        if learned_weight is None:
-            x = self.down_block(self.down(enc_seq[-1]))
-        else:
-            x = custom_conv_down(self.down(enc_seq[-1])
+        x = self.down_block(self.down(enc_seq[-1]))
                                                   
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         
         for i in range(self.depth):
             x = torch.cat([x, enc_seq[-(i+1)]], 1)
-                                             
-            if learned_weight is None:
-                x = self.up_block(x)
-            else:
-                x = custom_conv_up(x)
+            x = self.up_block(x)
                                               
             if i < (self.depth - 1):
                 x = F.interpolate(x, scale_factor=2, mode='nearest')
