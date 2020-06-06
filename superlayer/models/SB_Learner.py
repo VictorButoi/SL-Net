@@ -9,13 +9,12 @@ from torch.autograd import Function
 
 class BlockLearner(nn.Module):
     
-    def __init__(self, input_ch, out_ch, use_bn, super_block_dim, depth, W=None):
+    def __init__(self, input_ch, out_ch, use_bn, enc_nf, dec_nf, super_block_dim):
         super(BlockLearner, self).__init__()
         
         self.n_classes = out_ch
-        self.ignore_last = ignore_last
         
-        self.W = torch.randn(super_block_dim[0], super_block_dim[1],super_block_dim[2],super_block_dim[3])
+        self.W = torch.randn(super_block_dim[0], super_block_dim[1],super_block_dim[2],super_block_dim[3]).cuda()
 
         self.block0 = simple_block(input_ch , enc_nf[0], use_bn)
         self.block1 = simple_block(enc_nf[0], enc_nf[1], use_bn)
@@ -27,9 +26,9 @@ class BlockLearner(nn.Module):
         self.block5 = simple_block(dec_nf[0], dec_nf[1], use_bn)       
         self.block6 = simple_block(dec_nf[1], dec_nf[2], use_bn)         
         self.block7 = simple_block(dec_nf[2], dec_nf[3], use_bn) 
-        self.block8 = simple_block(dec_nf[3], dec_nf[3],    use_bn)           
+        self.block8 = simple_block(dec_nf[3], dec_nf[3], use_bn)           
 
-        self.out_conv = nn.Conv3d(dec_nf[3], out_ch, kernel_size=3, padding=1)
+        self.out_conv = nn.Conv2d(dec_nf[3], out_ch, kernel_size=3, padding=1)
         self.sm = nn.Softmax(dim=1)
 
     def forward(self):
@@ -68,9 +67,9 @@ class simple_block(nn.Module):
         
         self.use_bn= use_bn
         
-        self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
-        self.bn1 = nn.InstanceNorm3d(out_channels)  
+        self.bn1 = nn.InstanceNorm2d(out_channels)  
         self.activation = nn.ReLU()
 
     def forward(self, x):

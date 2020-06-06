@@ -80,7 +80,10 @@ class simple_block(nn.Module):
         super(simple_block, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.W = weight
+        if torch.is_tensor(weight):
+            self.W = weight
+        else:
+            self.W = torch.from_numpy(weight).cuda()
         self.use_bn= use_bn
         
         if weight is None:

@@ -67,7 +67,10 @@ def train_block(net,
         Images scaling:  {img_scale}
     ''')
     
-    bl_net = BlockLearner()
+    enc_nf = [128, 128, 128, 128]
+    dec_nf = [128, 128, 128, 128]
+    bl_net = BlockLearner(input_ch=256, out_ch=256, use_bn=True, enc_nf=enc_nf, dec_nf=dec_nf, super_block_dim=[128,256,3,3])
+    net.eval()
 
     optimizer = optim.RMSprop(bl_net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
@@ -97,7 +100,7 @@ def train_block(net,
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
                 one_hot_true_masks = one_hot(true_masks, net.n_classes)
                 
-                outweight = BlockLearner()
+                outweight = bl_net()
                 masks_pred = net(imgs, outweight)
 
                 loss = criterion(masks_pred, one_hot_true_masks)
