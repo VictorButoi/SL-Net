@@ -31,8 +31,11 @@ class SuperNet(nn.Module):
                 self.W = torch.zeros(half_size, superblock_size,3,3)
         else:
             self.W = W
+            if not torch.is_tensor(self.W):
+                self.W = torch.from_numpy(self.W)
             
         hW = self.W[:,:half_size,:,:]
+        
 
         self.block0 = simple_block(input_ch , half_size, use_bn, weight=firstW)   
         self.down_block = simple_block(half_size, half_size, use_bn, weight=hW)
@@ -49,6 +52,8 @@ class SuperNet(nn.Module):
     def forward(self, x_in, learned_weight=None):
         
         if not learned_weight is None:
+            learned_weight = learned_weight.detach()
+            
             half_size = int(self.superblock_size/2)
             half_learned_weight = learned_weight[:,:half_size,:,:]
             self.down_block = simple_block(half_size, half_size, self.use_bn, weight=half_learned_weight)

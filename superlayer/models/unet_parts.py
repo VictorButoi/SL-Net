@@ -80,10 +80,17 @@ class simple_block(nn.Module):
         super(simple_block, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        if torch.is_tensor(weight):
-            self.W = weight
-        else:
-            self.W = torch.from_numpy(weight).cuda()
+        
+        if not weight is None:
+            print('HIT HERE ONCE')
+            weight_no_grad = weight.detach()
+            
+            if torch.is_tensor(weight_no_grad):
+                self.W = weight_no_grad
+            else:
+                self.W = torch.from_numpy(weight_no_grad).cuda()
+ 
+
         self.use_bn= use_bn
         
         if weight is None:
