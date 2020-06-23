@@ -43,7 +43,8 @@ def train_net(net,
               writer=None,
               jupyterN=True,
               train_path=None,
-              val_path=None):
+              val_path=None,
+              segment=True):
     
     if not jupyterN:
         target_label_numbers = [0,2,3,4,10,16,17,28,31,41,42,43,49,53,63]
@@ -88,10 +89,13 @@ def train_net(net,
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
 
     if net.n_classes > 1:
-        if dice:
-            criterion = dice_coeff
+        if segment:
+            if dice:
+                criterion = dice_coeff
+            else:
+                criterion = nn.CrossEntropyLoss()
         else:
-            criterion = nn.CrossEntropyLoss()
+            criterion = nn.MSELoss()
     else:
         criterion = nn.BCEWithLogitsLoss()
     
@@ -120,13 +124,23 @@ def train_net(net,
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
                 one_hot_true_masks = one_hot(true_masks, net.n_classes)
 
-                masks_pred = net(imgs)
-
-                loss = criterion(masks_pred, one_hot_true_masks)
+         
+                pred = net(imgs)
+                
+                if segment:
+                    comp = one_hot_true_masks
+                else:
+                    comp = imgs
+                
+                loss = criterion(pred, comp)
                 epoch_loss += loss.item()
-
-                pred = torch.argmax(masks_pred, axis=1).unsqueeze(1)
-                hard_loss = criterion(pred, true_masks)
+                
+                if segment:
+                    pred = torch.argmax(pred, axis=1).unsqueeze(1)
+                    hard_loss = criterion(pred, true_masks)
+                else:
+                    hard_loss = loss
+                    
                 running_train_losses.append(hard_loss.item())
 
                 writer.add_scalar('Loss/train', loss.item(), global_step)
@@ -141,7 +155,7 @@ def train_net(net,
 
                 if global_step % sub_epoch_interval == 0:
 
-                    val_score, val_var = eval_net(net, val_loader, device)
+                    val_score, val_var = eval_net(net, val_loader, device, segment)
 
                     train_scores.append(np.average(running_train_losses))
                     val_scores.append(val_score)

@@ -9,7 +9,7 @@ from torch.autograd import Function
 
 
 class AEnet(nn.Module):
-    def __init__(self, input_ch, out_ch, use_bn, enc_nf, dec_nf, ignore_last=False):
+    def __init__(self, input_ch, out_ch, use_bn, enc_nf, dec_nf, ignore_last=True):
         super(AEnet, self).__init__()
         
         self.n_classes = out_ch
@@ -26,14 +26,18 @@ class AEnet(nn.Module):
         self.block5 = simple_block(dec_nf[0], dec_nf[1], use_bn)       
         self.block6 = simple_block(dec_nf[1], dec_nf[2], use_bn)         
         self.block7 = simple_block(dec_nf[2], dec_nf[3], use_bn) 
-        self.block8 = simple_block(dec_nf[3], dec_nf[3],    use_bn)           
-
+        self.block8 = simple_block(dec_nf[3], dec_nf[3], use_bn)           
+    
+        self.reconstruct_conv = nn.Conv2d(dec_nf[3], input_ch, kernel_size=3, padding=1)        
+        
         self.out_conv = nn.Conv2d(dec_nf[3], out_ch, kernel_size=3, padding=1)
         self.sm = nn.Softmax(dim=1)
+        
+        self.last_relu = nn.ReLU()
 
     def forward(self, x_in):
 
-        #Model
+        #Modelself.reconstruct_conv = simple_block(dec_nf[3], input_ch, use_bn)  
         x0 = self.block0(x_in)
         
         x1 = self.block1(self.down(x0))
@@ -58,10 +62,13 @@ class AEnet(nn.Module):
 
         x = self.block8(x)
         
-        out = self.out_conv(x)
-        out = self.sm(out)
+        if not self.ignore_last:
+            out = self.out_conv(x)
+            x = self.sm(out)
+        else:
+            x = self.reconstruct_conv(x)
         
-        return out
+        return x
 
 class simple_block(nn.Module):
     def __init__(self, in_channels, out_channels, use_bn):

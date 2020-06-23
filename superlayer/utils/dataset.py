@@ -60,10 +60,10 @@ class BrainD(Dataset):
         
         if self.load_npz:
             mask_file = glob(self.masks_dir + (idx[:-4] + "aseg") + '*')
-            img_file = glob(self.imgs_dir + idx + '*')
         else:
             mask_file = glob(self.masks_dir + idx + '*')
-            img_file = glob(self.imgs_dir + idx + '*')
+        
+        img_file = glob(self.imgs_dir + idx + '*')
 
         assert len(mask_file) == 1, \
             f'Either no mask or multiple masks found for the ID {idx}: {mask_file}'

@@ -9,7 +9,7 @@ sys.path.append("..")
 from superlayer.utils import BrainD, dice_coeff, one_hot
 
 
-def eval_net(net, loader, device):
+def eval_net(net, loader, device, segment):
     """Evaluation without the densecrf with the dice coefficient"""
     net.eval()
     n_val = len(loader)  # the number of batch
@@ -23,16 +23,21 @@ def eval_net(net, loader, device):
             true_masks = true_masks.to(device=device, dtype=torch.float32)
 
             with torch.no_grad():
-                mask_pred = net(imgs)
+                pred = net(imgs)
 
             if net.n_classes > 1:
-                pred = torch.argmax(mask_pred, axis=1).unsqueeze(1)
-                loss = dice_coeff(pred, true_masks).item()
+                if segment:
+                    pred = torch.argmax(pred, axis=1).unsqueeze(1)
+                    loss = dice_coeff(pred, true_masks).item()
+                else:
+                    MSE = nn.MSELoss()
+                    loss = MSE(imgs, pred).item()
+                    
                 tot = tot + loss
                 running_var.append(loss)
 
             else:
-                pred = torch.sigmoid(mask_pred)
+                pred = torch.sigmoid(pred)
                 pred = (pred > 0.5).float()
                 tot += dice_coeff(pred, true_masks).item()
             pbar.update()

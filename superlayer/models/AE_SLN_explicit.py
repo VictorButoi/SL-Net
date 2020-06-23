@@ -12,12 +12,13 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 class AESuperNet(nn.Module):
     
-    def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth, W=None):
+    def __init__(self, input_ch, out_ch, use_bn, superblock_size, depth, W=None, ignore_last=False):
         super(AESuperNet, self).__init__()
         
         self.depth = depth
         self.n_classes = out_ch
         self.down = torch.nn.MaxPool2d(2,2)
+        self.ignore_last = ignore_last
         
         #Kernel size is 3
         if W==None:
@@ -28,9 +29,11 @@ class AESuperNet(nn.Module):
 
         self.block0 = simple_block(input_ch , superblock_size, use_bn)   
         self.super_block = simple_block(superblock_size, superblock_size, use_bn, weight=self.W)
-
+        
+        self.reconstruct_conv = simple_block(superblock_size, 1, use_bn)  
         self.out_conv = nn.Conv2d(superblock_size, out_ch, kernel_size=3, padding=1)
         self.sm = nn.Softmax(dim=1)
+        self.final_relu = nn.ReLU()
 
         
     def forward(self, x_in):
@@ -50,7 +53,10 @@ class AESuperNet(nn.Module):
             if i < (self.depth - 1):
                 x = F.interpolate(x, scale_factor=2, mode='nearest')
         
-        out = self.out_conv(x)
-        out = self.sm(out)
-        
-        return out
+        if not self.ignore_last:
+            out = self.out_conv(x)
+            x = self.sm(out)
+        else:
+            x = self.reconstruct_conv(x)
+    
+        return  x

@@ -21,27 +21,28 @@ class SuperNet(nn.Module):
         self.down = torch.nn.MaxPool2d(2,2)
         half_size = int(superblock_size/2)
         self.use_bn = use_bn
+        hW = None
         
         #Kernel size is 3
         if W==None:
             if not learnB:
                 self.W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
                 self.W.requires_grad = True
+                hW = self.W[:,:half_size,:,:]
+                hW.requires_grad = True
             else:
                 self.W = torch.zeros(half_size, superblock_size,3,3)
         else:
             self.W = W
             if not torch.is_tensor(self.W):
                 self.W = torch.from_numpy(self.W)
-            
-        hW = self.W[:,:half_size,:,:]
         
 
         self.block0 = simple_block(input_ch , half_size, use_bn, weight=firstW)   
         self.down_block = simple_block(half_size, half_size, use_bn, weight=hW)
         self.up_block = simple_block(superblock_size, half_size, use_bn, weight=self.W)
         
-        if not lastW is None:
+        if lastW is None:
             self.out_conv = nn.Conv2d(half_size, out_ch, kernel_size=3, padding=1)
         else:
             self.out_conv = F.conv2d(x, lastW, padding=1)
