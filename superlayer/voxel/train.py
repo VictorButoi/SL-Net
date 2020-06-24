@@ -37,7 +37,6 @@ from medipy.metrics import dice
 def train(mod,
           gpu,
           data_dir,
-          val_dir,
           atlas_file,
           lr,
           n_iter,
@@ -45,8 +44,6 @@ def train(mod,
           model,
           reg_param, 
           batch_size,
-          n_save_iter,
-          model_dir,
           train_module=None):
 
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu
@@ -92,11 +89,6 @@ def train(mod,
    
     for i in range(n_iter):
         model.train()
-
-        # Save model checkpoint
-        if i % n_save_iter == 0:
-            save_file_name = os.path.join(model_dir, '%d.ckpt' % i)
-            torch.save(model.state_dict(), save_file_name)
 
         # Generate the moving images and convert them to tensors.
         moving_image = next(train_example_gen)[0]

@@ -1,0 +1,5 @@
+GSP_110124_TC68ZU_FS_mri_talairach_norm
+GSP_091020_CZ92NU_FS_mri_talairach_norm
+ADNI_ADNI-3T-FS-5.3-Long_322256.long.031_S_2022_base_mri_talairach_norm
+ADNI_ADNI-3T-FS-5.3-Long_314551.long.021_S_4419_base_mri_talairach_norm
+ADNI_ADNI-3T-FS-5.3-Long_314526.long.127_S_4604_base_mri_talairach_norm

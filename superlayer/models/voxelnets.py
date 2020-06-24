@@ -29,6 +29,8 @@ class unet_core(nn.Module):
         self.enc_nf = enc_nf
         self.dec_nf = dec_nf
         
+        self.vm2 = len(dec_nf) == 7
+        
         if superblock_size == 0:
             self.train_W = False
             
@@ -53,21 +55,20 @@ class unet_core(nn.Module):
         
         else:
             self.train_W = True
+            half_size = int(superblock_size/2)
             
             self.W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
             self.W.requires_grad = True
             hW = self.W[:,:half_size,:,:]
-            hW.requires_grad = True
+            
+            self.down = torch.nn.MaxPool2d(2,2)
             
             self.superblock_size = superblock_size
-            self.depth = depth
-            self.n_classes = out_ch
-            self.down = torch.nn.MaxPool2d(2,2)
-            half_size = int(superblock_size/2)
             
-            self.in_block = conv_block(dim, 2, half_size, 2)
-            self.down_block = conv_block(dim, half_size, half_size, 2, hW)
-            self.up_block = conv_block(dim, superblock_size, half_size, 2, self.W)
+            self.in_block = conv_block(dim, 2, half_size)
+            self.down_block = conv_block(dim, half_size, half_size, weight=hW)
+            self.up_block = conv_block(dim, superblock_size, half_size, weight=self.W)
+            self.out_conv = conv_block(dim, half_size + 2, half_size, weight=hW)
  
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
@@ -83,28 +84,43 @@ class unet_core(nn.Module):
             for l in self.enc:
                 x_enc.append(l(x_enc[-1]))
         else:
-            for _ in self.enc_nf:
-                x_enc.append(self.down_block(x_enc[-1]))
+            for i in range(len(self.enc_nf)):
+                xenc = self.down(x_enc[-1])
+                if i == 0:
+                    x = self.in_block(xenc)
+                else:
+                    x = self.down_block(xenc)
+                x_enc.append(x)
 
         # Three conv + upsample + concatenate series
         y = x_enc[-1]
         for i in range(3):
-            y = self.dec[i](y)
-            y = self.upsample(y)
-            y = torch.cat([y, x_enc[-(i+2)]], dim=1)
-
+            if self.train_W:
+                y = self.upsample(y)
+                y = torch.cat([y, x_enc[-(i+2)]], dim=1)
+                y = self.up_block(y)
+            else:
+                y = self.dec[i](y)
+                y = self.upsample(y)
+                y = torch.cat([y, x_enc[-(i+2)]], dim=1)
+            
         # Two convs at full_size/2 res
-        y = self.dec[3](y)
-        y = self.dec[4](y)
+        if self.train_W:
+            y = self.down_block(y)
+            y = self.down_block(y)
+        else:
+            y = self.dec[3](y)
+            y = self.dec[4](y)
 
         # Upsample to full res, concatenate and conv
         if self.full_size:
             y = self.upsample(y)
             y = torch.cat([y, x_enc[0]], dim=1)
-            y = self.dec[5](y)
+            y = self.out_conv(y) if self.train_W else self.dec[5](y)
 
         # Extra conv for vm2
-        y = self.vm2_conv(y)
+        if self.vm2:
+            y = self.down_block(y) if self.train_W else self.vm2_conv(y)
 
         return y
 
