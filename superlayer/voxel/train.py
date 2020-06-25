@@ -37,7 +37,8 @@ from medipy.metrics import dice
 def train(mod,
           gpu,
           data_dir,
-          val_dir,
+          train_file,
+          val_file,
           atlas_file,
           lr,
           n_iter,
@@ -45,8 +46,6 @@ def train(mod,
           model,
           reg_param, 
           batch_size,
-          n_save_iter,
-          model_dir,
           train_module=None):
 
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu
@@ -57,7 +56,7 @@ def train(mod,
 
     # Get all the names of the training data
     
-    train_file = open('/home/vib9/src/SL-Net/jupyter/partitions/train.txt')
+    train_file = open(train_file)
     train_strings = train_file.readlines()
     train_vol_names = [data_dir + x.strip() + ".npz" for x in train_strings]
     
@@ -93,11 +92,6 @@ def train(mod,
     for i in range(n_iter):
         model.train()
 
-        # Save model checkpoint
-        if i % n_save_iter == 0:
-            save_file_name = os.path.join(model_dir, '%d.ckpt' % i)
-            torch.save(model.state_dict(), save_file_name)
-
         # Generate the moving images and convert them to tensors.
         moving_image = next(train_example_gen)[0]
         input_moving = torch.from_numpy(moving_image).to(device).float()
@@ -126,7 +120,7 @@ def train(mod,
         if i % 10000 == 0 and not i == 0:
             model.eval()
                 
-            val_loss_score, val_reconstruction_score = eval_net(gpu, model, batch_size, input_fixed, device, atlas_file, data_dir, data_loss, reg_param)
+            val_loss_score, val_reconstruction_score = eval_net(gpu, model, val_file, batch_size, input_fixed, device, atlas_file, data_dir, data_loss, reg_param)
             
             train_loss_scores.append(np.average(running_loss_losses))
             train_reconstruction_scores.append(np.average(running_recon_losses))
@@ -140,7 +134,8 @@ def train(mod,
             
 
 def eval_net(gpu, 
-             model, 
+             model,
+             val_file,
              batch_size, 
              input_fixed, 
              device, 
@@ -153,7 +148,7 @@ def eval_net(gpu,
     device = "cuda"
 
     # Test file and anatomical labels we want to evaluate
-    val_file = open('/home/vib9/src/SL-Net/jupyter/partitions/val.txt')
+    val_file = open(val_file)
     val_strings = val_file.readlines()
     val_vol_names = [data_dir + x.strip() + ".npz" for x in val_strings]
     

@@ -156,7 +156,7 @@ class SpatialTransformer(nn.Module):
             new_locs = new_locs.permute(0, 2, 3, 4, 1) 
             new_locs = new_locs[..., [2,1,0]]
 
-        return nnf.grid_sample(src, new_locs, mode=self.mode)
+        return F.grid_sample(src, new_locs, mode=self.mode)
 
 
 class conv_block(nn.Module):
@@ -165,7 +165,7 @@ class conv_block(nn.Module):
     is a convolution based on the size of the input channel and output
     channels and then preforms a Leaky Relu with parameter 0.2.
     """
-    def __init__(self, dim, in_channels, out_channels, stride=1):
+    def __init__(self, dim, in_channels, out_channels, stride=1, weight=None):
         """
         Instiatiate the conv block
             :param dim: number of dimensions of the input

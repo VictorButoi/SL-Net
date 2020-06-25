@@ -22,12 +22,14 @@ class unet_core(nn.Module):
     [unet_core] is a class representing the U-Net implementation that takes in
     a fixed image and a moving image and outputs a flow-field
     """
-    def __init__(self, dim, enc_nf, dec_nf, full_size=True, superblock_size=0):
+    def __init__(self, dim, enc_nf, dec_nf, full_size=True, superblock_size=0, weight=None):
         super(unet_core, self).__init__()
 
         self.full_size = full_size
         self.enc_nf = enc_nf
         self.dec_nf = dec_nf
+        
+        self.vm2 = len(dec_nf) == 7
         
         if superblock_size == 0:
             self.train_W = False
@@ -53,21 +55,25 @@ class unet_core(nn.Module):
         
         else:
             self.train_W = True
-            
-            self.W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
-            self.W.requires_grad = True
-            hW = self.W[:,:half_size,:,:]
-            hW.requires_grad = True
-            
-            self.superblock_size = superblock_size
-            self.depth = depth
-            self.n_classes = out_ch
-            self.down = torch.nn.MaxPool2d(2,2)
             half_size = int(superblock_size/2)
             
-            self.in_block = conv_block(dim, 2, half_size, 2)
-            self.down_block = conv_block(dim, half_size, half_size, 2, hW)
-            self.up_block = conv_block(dim, superblock_size, half_size, 2, self.W)
+            if weight is None:
+                self.W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
+                self.W.requires_grad = True
+            else:
+                self.W = torch.from_numpy(weight)
+                self.W.requires_grad = False
+                
+            hW = self.W[:,:half_size,:,:]
+            
+            self.down = torch.nn.MaxPool2d(2,2)
+            
+            self.superblock_size = superblock_size
+            
+            self.in_block = conv_block(dim, 2, half_size)
+            self.down_block = conv_block(dim, half_size, half_size, weight=hW)
+            self.up_block = conv_block(dim, superblock_size, half_size, weight=self.W)
+            self.out_conv = conv_block(dim, half_size + 2, half_size, weight=hW)
  
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
@@ -83,28 +89,43 @@ class unet_core(nn.Module):
             for l in self.enc:
                 x_enc.append(l(x_enc[-1]))
         else:
-            for _ in self.enc_nf:
-                x_enc.append(self.down_block(x_enc[-1]))
+            for i in range(len(self.enc_nf)):
+                xenc = self.down(x_enc[-1])
+                if i == 0:
+                    x = self.in_block(xenc)
+                else:
+                    x = self.down_block(xenc)
+                x_enc.append(x)
 
         # Three conv + upsample + concatenate series
         y = x_enc[-1]
         for i in range(3):
-            y = self.dec[i](y)
-            y = self.upsample(y)
-            y = torch.cat([y, x_enc[-(i+2)]], dim=1)
-
+            if self.train_W:
+                y = self.upsample(y)
+                y = torch.cat([y, x_enc[-(i+2)]], dim=1)
+                y = self.up_block(y)
+            else:
+                y = self.dec[i](y)
+                y = self.upsample(y)
+                y = torch.cat([y, x_enc[-(i+2)]], dim=1)
+            
         # Two convs at full_size/2 res
-        y = self.dec[3](y)
-        y = self.dec[4](y)
+        if self.train_W:
+            y = self.down_block(y)
+            y = self.down_block(y)
+        else:
+            y = self.dec[3](y)
+            y = self.dec[4](y)
 
         # Upsample to full res, concatenate and conv
         if self.full_size:
             y = self.upsample(y)
             y = torch.cat([y, x_enc[0]], dim=1)
-            y = self.dec[5](y)
+            y = self.out_conv(y) if self.train_W else self.dec[5](y)
 
         # Extra conv for vm2
-        y = self.vm2_conv(y)
+        if self.vm2:
+            y = self.down_block(y) if self.train_W else self.vm2_conv(y)
 
         return y
 
@@ -114,7 +135,7 @@ class cvpr2018_net(nn.Module):
     [cvpr2018_net] is a class representing the specific implementation for 
     the 2018 implementation of voxelmorph.
     """
-    def __init__(self, vol_size, enc_nf, dec_nf, full_size=True, superblock_size=0):
+    def __init__(self, vol_size, enc_nf, dec_nf, full_size=True, superblock_size=0, weight=None):
         """
         Instiatiate 2018 model
             :param vol_size: volume size of the atlas
@@ -126,7 +147,7 @@ class cvpr2018_net(nn.Module):
 
         dim = len(vol_size)
         
-        self.unet_model = unet_core(dim, enc_nf, dec_nf, full_size, superblock_size)
+        self.unet_model = unet_core(dim, enc_nf, dec_nf, full_size, superblock_size, weight)
 
         # One conv to get the flow field
         conv_fn = getattr(nn, 'Conv%dd' % dim)

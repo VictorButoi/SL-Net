@@ -29,7 +29,6 @@ class SuperNet(nn.Module):
                 self.W = torch.nn.Parameter(torch.randn(half_size, superblock_size,3,3))
                 self.W.requires_grad = True
                 hW = self.W[:,:half_size,:,:]
-                hW.requires_grad = True
             else:
                 self.W = torch.zeros(half_size, superblock_size,3,3)
         else:
