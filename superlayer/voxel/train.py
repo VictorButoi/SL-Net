@@ -46,7 +46,8 @@ def train(mod,
           model,
           reg_param, 
           batch_size,
-          train_module=None):
+          train_module=None,
+          target_label_numbers=None):
 
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu
     device = "cuda"
@@ -88,6 +89,8 @@ def train(mod,
     
     running_loss_losses = []
     running_recon_losses = []
+    
+    dices = []
    
     for i in range(n_iter):
         model.train()
@@ -118,19 +121,23 @@ def train(mod,
         opt.step()
 
         if i % 10000 == 0 and not i == 0:
-            model.eval()
                 
             val_loss_score, val_reconstruction_score = eval_net(gpu, model, val_file, batch_size, input_fixed, device, atlas_file, data_dir, data_loss, reg_param)
             
+            dice = test_net(gpu, model, atlas_file, val_file, data_dir, target_label_numbers)
+            
             train_loss_scores.append(np.average(running_loss_losses))
             train_reconstruction_scores.append(np.average(running_recon_losses))
+            
             val_loss_scores.append(val_loss_score)
             val_reconstruction_scores.append(val_reconstruction_score)
+            
+            dices.append(dice)
             
             running_recon_losses = []
             running_loss_losses = []
             
-    return train_loss_scores, train_reconstruction_scores, val_loss_scores, val_reconstruction_scores
+    return train_loss_scores, train_reconstruction_scores, val_loss_scores, val_reconstruction_scores, dice
             
 
 def eval_net(gpu, 
@@ -143,6 +150,8 @@ def eval_net(gpu,
              data_dir, 
              data_loss, 
              reg_param):
+    
+    model.eval()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu
     device = "cuda"
@@ -183,3 +192,74 @@ def eval_net(gpu,
                  % (k, loss.item(), recon_loss.item()), flush=True)
     
     return running_loss/len(val_strings), running_recon/len(val_strings)
+
+
+def test_net(gpu, 
+             model,
+             atlas_file,
+             val_file,
+             data_dir,
+             target_label_numbers):
+    """
+    model training function
+    :param gpu: integer specifying the gpu to use
+    :param atlas_file: atlas filename. So far we support npz file with a 'vol' variable
+    :param model: either vm1 or vm2 (based on CVPR 2018 paper)
+    :param init_model_file: the model directory to load from
+    """
+    model.eval()
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu
+    device = "cuda"
+   
+    # Produce the loaded atlas with dims.:160x192x224.
+    atlas = np.load(atlas_file)
+    atlas_vol = atlas['vol'][np.newaxis, ..., np.newaxis][:,:,:,100,:]
+    atlas_seg = atlas['seg'][:,:,100]
+    
+    vol_size = atlas_vol.shape[1:-1]
+
+    # Test file and anatomical labels we want to evaluate
+    val_file = open(val_file)
+    val_strings = val_file.readlines()
+    
+    def create_vol_name(data_dir, x):
+        vol_string = data_dir + x + ".npz"
+        aseg_string = vol_string.replace("vols", "asegs").replace("norm","aseg")
+        return vol_string + "," + aseg_string
+        
+    val_vol_names = [create_vol_name(data_dir, x.strip()) for x in val_strings]
+
+    # Prepare the vm1 or vm2 model and send to device
+    nf_enc = [16, 32, 32, 32]
+    nf_dec = [32, 32, 32, 32, 32, 16, 16]
+
+    # set up atlas tensor
+    input_fixed  = torch.from_numpy(atlas_vol).to(device).float()
+    input_fixed  = input_fixed.permute(0, 3, 1, 2)
+
+    # Use this to warp segments
+    trf = SpatialTransformer(atlas_vol.shape[1:-1], mode='nearest')
+    trf.to(device)
+
+    for k in range(0, len(val_vol_names)):
+
+        vol_name, seg_name = val_vol_names[k].split(",")
+        
+        X_vol, X_seg = datagenerators.load_example_by_name(vol_name, seg_name)
+
+        input_moving  = torch.from_numpy(X_vol).to(device).float()
+        input_moving  = input_moving.permute(0, 3, 1, 2)
+        
+        warp, flow = model(input_moving, input_fixed)
+
+        # Warp segment using flow
+        moving_seg = torch.from_numpy(X_seg).to(device).float()
+        moving_seg = moving_seg.permute(0, 3, 1, 2)
+        warp_seg   = trf(moving_seg, flow).detach().cpu().numpy()
+
+        vals, labels = dice(warp_seg, atlas_seg, labels=target_label_numbers, nargout=2)
+
+        return np.mean(vals)
+        
+        
