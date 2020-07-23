@@ -25,8 +25,7 @@ class BrainD(Dataset):
             with open(id_file) as id_file: 
                 for line in id_file:
                     if not line.startswith('.'):
-                        self.ids.append(line[:-1])
-            
+                        self.ids.append(line[:-1])            
         
         logging.info(f'Creating dataset with {len(self.ids)} examples')
 

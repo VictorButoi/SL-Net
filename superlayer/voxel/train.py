@@ -53,7 +53,9 @@ def train(mod,
     device = "cuda"
 
     # Produce the loaded atlas with dims.:160x192x224.
-    atlas_vol = np.load(atlas_file)['vol'][np.newaxis, ..., np.newaxis]
+    atlas = np.load(atlas_file)
+    atlas_vol = atlas['vol'][np.newaxis, ..., np.newaxis]
+    atlas_seg = atlas['seg'][:,:,100]
 
     # Get all the names of the training data
     
@@ -72,7 +74,7 @@ def train(mod,
     grad_loss_fn = losses.gradient_loss
 
     # data generator
-    train_example_gen = datagenerators.example_gen(train_vol_names, batch_size)
+    train_example_gen = datagenerators.example_gen(train_vol_names, batch_size, return_segs=True)
 
     # set up atlas tensor
     atlas_vol_bs = np.repeat(atlas_vol, batch_size, axis=0)
@@ -90,20 +92,39 @@ def train(mod,
     running_loss_losses = []
     running_recon_losses = []
     
-    dices = []
+    train_dices = []
+    val_dices = []
+    
+    train_dice_acc = []
+    # Use this to warp segments
+    
+    atlas_slice = atlas['vol'][np.newaxis, ..., np.newaxis][:,:,:,100,:]
+    
+    trf = SpatialTransformer(atlas_slice.shape[1:-1], mode='nearest')
+    trf.to(device)
    
     for i in range(n_iter):
         model.train()
 
         # Generate the moving images and convert them to tensors.
-        moving_image = next(train_example_gen)[0]
+        moving_image, moving_seg = next(train_example_gen)
+        
         input_moving = torch.from_numpy(moving_image).to(device).float()
-
         input_moving = input_moving.permute(0, 3, 1, 2)
 
         # Run the data through the model to produce warp and flow field
         warp, flow = model(input_moving, input_fixed)
+        
+        # Warp segment using flow
+        moving_seg = torch.from_numpy(moving_seg).to(device).float()
+        moving_seg = moving_seg.permute(0, 3, 1, 2)
+        
+        warp_seg = trf(moving_seg, flow).detach().cpu().numpy()
 
+        vals, _ = dice(warp_seg, atlas_seg, labels=target_label_numbers, nargout=2)
+
+        train_dice_acc.append(np.mean(vals))
+        
         # Calculate loss
         recon_loss = sim_loss_fn(warp, input_fixed) 
         grad_loss = grad_loss_fn(flow)
@@ -120,24 +141,27 @@ def train(mod,
         loss.backward()
         opt.step()
 
-        if i % 10000 == 0 and not i == 0:
-                
-            val_loss_score, val_reconstruction_score = eval_net(gpu, model, val_file, batch_size, input_fixed, device, atlas_file, data_dir, data_loss, reg_param)
+        if i % 50 == 0:
+              
+            #val_loss_score, val_reconstruction_score = eval_net(gpu, model, val_file, batch_size, input_fixed, device, atlas_file, data_dir, data_loss, reg_param)
             
-            dice = test_net(gpu, model, atlas_file, val_file, data_dir, target_label_numbers)
+            d = test_net(gpu, model, atlas_file, val_file, data_dir, target_label_numbers)
             
             train_loss_scores.append(np.average(running_loss_losses))
             train_reconstruction_scores.append(np.average(running_recon_losses))
             
-            val_loss_scores.append(val_loss_score)
-            val_reconstruction_scores.append(val_reconstruction_score)
+            #val_loss_scores.append(val_loss_score)
+            #val_reconstruction_scores.append(val_reconstruction_score)
             
-            dices.append(dice)
+            val_dices.append(d)
+            train_dices.append(np.average(train_dice_acc))
             
             running_recon_losses = []
             running_loss_losses = []
             
-    return train_loss_scores, train_reconstruction_scores, val_loss_scores, val_reconstruction_scores, dice
+            train_dice_acc = []
+            
+    return train_loss_scores, train_reconstruction_scores, train_dices, val_dices
             
 
 def eval_net(gpu, 
@@ -239,6 +263,7 @@ def test_net(gpu,
     input_fixed  = input_fixed.permute(0, 3, 1, 2)
 
     # Use this to warp segments
+    
     trf = SpatialTransformer(atlas_vol.shape[1:-1], mode='nearest')
     trf.to(device)
 
@@ -256,7 +281,8 @@ def test_net(gpu,
         # Warp segment using flow
         moving_seg = torch.from_numpy(X_seg).to(device).float()
         moving_seg = moving_seg.permute(0, 3, 1, 2)
-        warp_seg   = trf(moving_seg, flow).detach().cpu().numpy()
+        
+        warp_seg = trf(moving_seg, flow).detach().cpu().numpy()
 
         vals, labels = dice(warp_seg, atlas_seg, labels=target_label_numbers, nargout=2)
 

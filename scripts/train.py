@@ -62,8 +62,10 @@ def train_net(net,
     if not(train_path == None or val_path == None):
         train = BrainD(dir_img, dir_mask, id_file=train_path, label_numbers=target_label_numbers)
         val = BrainD(dir_img, dir_mask, id_file=val_path, label_numbers=target_label_numbers)
-        train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+        
+        train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)            
         val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
+        
         n_val = len(val)
         n_train = len(train)
         dataset_size = n_val + n_train
