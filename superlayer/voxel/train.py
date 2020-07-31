@@ -4,9 +4,14 @@
 VoxelMorph training.
 """
 #test comment
+from collections import Counter
+
 import sys
 sys.path.append("/home/vib9/src/voxelmorph-sandbox/pytorch/")
 sys.path.append("/home/vib9/src/SL-Net/superlayer/")
+sys.path.append("/home/vib9/src/voxelmorph/ext/medipy-lib/medipy")
+
+from metrics import dice
 
 # python imports
 import os
@@ -22,6 +27,7 @@ from torch.optim import Adam
 
 import datagenerators
 import losses
+import matplotlib.pyplot as plt
 
 from models import SpatialTransformer
 
@@ -29,9 +35,6 @@ sys.path.append("../voxel/")
 
 
 import scipy.io as sio
-
-sys.path.append('/home/vib9/src/voxelmorph/ext/medipy-lib')
-from medipy.metrics import dice
 
 
 def train(mod,
@@ -82,7 +85,6 @@ def train(mod,
     
     input_fixed  = input_fixed.permute(0, 3, 1, 2)
     
-    
     train_loss_scores = []
     val_loss_scores = []
     
@@ -102,8 +104,9 @@ def train(mod,
     
     trf = SpatialTransformer(atlas_slice.shape[1:-1], mode='nearest')
     trf.to(device)
-   
+    
     for i in range(n_iter):
+     
         model.train()
 
         # Generate the moving images and convert them to tensors.
@@ -118,12 +121,10 @@ def train(mod,
         # Warp segment using flow
         moving_seg = torch.from_numpy(moving_seg).to(device).float()
         moving_seg = moving_seg.permute(0, 3, 1, 2)
-        
         warp_seg = trf(moving_seg, flow).detach().cpu().numpy()
-
-        vals, _ = dice(warp_seg, atlas_seg, labels=target_label_numbers, nargout=2)
-
-        train_dice_acc.append(np.mean(vals))
+        
+        dice_score = 1 - np.average(dice(warp_seg, atlas_seg,labels=target_label_numbers))
+        train_dice_acc.append(dice_score)          
         
         # Calculate loss
         recon_loss = sim_loss_fn(warp, input_fixed) 
@@ -133,15 +134,15 @@ def train(mod,
         running_recon_losses.append(recon_loss.item())
         running_loss_losses.append(loss.item())
 
-        print("Train Epoch: %d | Loss: %f | Reconstruction Loss: %f"\
-                 % (i, loss.item(), recon_loss.item()), flush=True)
+        print("Train Epoch: %d | Loss: %f | Reconstruction Loss: %f | Dice Score: %f"\
+                 % (i, loss.item(), recon_loss.item(), dice_score.item()), flush=True)
 
         # Backwards and optimize
         opt.zero_grad()
         loss.backward()
         opt.step()
 
-        if i % 50 == 0:
+        if i % 1000 == 0:
               
             #val_loss_score, val_reconstruction_score = eval_net(gpu, model, val_file, batch_size, input_fixed, device, atlas_file, data_dir, data_loss, reg_param)
             
@@ -266,6 +267,8 @@ def test_net(gpu,
     
     trf = SpatialTransformer(atlas_vol.shape[1:-1], mode='nearest')
     trf.to(device)
+    
+    total_dice = 0
 
     for k in range(0, len(val_vol_names)):
 
@@ -284,8 +287,12 @@ def test_net(gpu,
         
         warp_seg = trf(moving_seg, flow).detach().cpu().numpy()
 
-        vals, labels = dice(warp_seg, atlas_seg, labels=target_label_numbers, nargout=2)
+        dice_score = np.average(dice(warp_seg, atlas_seg,labels=target_label_numbers))
+        print("Val iter " + str(k) + ": %f"\
+                 % (dice_score), flush=True)
 
-        return np.mean(vals)
+        total_dice += (1 - dice_score)
+        
+    return total_dice/len(val_vol_names)
         
         

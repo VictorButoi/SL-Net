@@ -1,10 +1,18 @@
 import torch
 from torch.autograd import Function
+import numpy as np
 
-def dice_coeff(pred, target):
+def dice_coeff(pred, target, target_label_numbers):
     eps = 1
-    
+       
     assert pred.size() == target.size(), 'Input and target are different dim'
+    
+    if not target_label_numbers is None:
+        pred_unique = np.unique(pred)
+        target_unique = np.unique(target)
+        
+        raise ValueError
+    
     if len(target.size())==4:
         n,c,x,y = target.size()
     if len(target.size())==5:
