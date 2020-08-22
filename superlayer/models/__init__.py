@@ -6,4 +6,6 @@ from .SLN_explicit import SuperNet
 from .AE_SLN_explicit import AESuperNet
 from .SB_Learner import BlockLearner
 from .voxelnets import cvpr2018_net
+from .voxelnets import sln_cvpr2018_net
 from .voxelnets import SpatialTransformer
+from .default_unet import Default

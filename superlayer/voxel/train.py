@@ -38,17 +38,17 @@ import scipy.io as sio
 
 
 def train(mod,
-          gpu,
           data_dir,
           train_file,
           val_file,
           atlas_file,
-          lr,
           n_iter,
-          data_loss,
-          model,
-          reg_param, 
           batch_size,
+          mod_name,
+          gpu='0',
+          lr=1e-4,
+          data_loss='mse',
+          reg_param=0.01,
           train_module=None,
           target_label_numbers=None):
 
@@ -85,14 +85,8 @@ def train(mod,
     
     input_fixed  = input_fixed.permute(0, 3, 1, 2)
     
-    train_loss_scores = []
-    val_loss_scores = []
-    
-    train_reconstruction_scores = []
-    val_reconstruction_scores = []
-    
-    running_loss_losses = []
-    running_recon_losses = []
+    train_std = []
+    val_std = []
     
     train_dices = []
     val_dices = []
@@ -116,6 +110,7 @@ def train(mod,
         input_moving = input_moving.permute(0, 3, 1, 2)
 
         # Run the data through the model to produce warp and flow field
+       
         warp, flow = model(input_moving, input_fixed)
         
         # Warp segment using flow
@@ -130,9 +125,6 @@ def train(mod,
         recon_loss = sim_loss_fn(warp, input_fixed) 
         grad_loss = grad_loss_fn(flow)
         loss = recon_loss + reg_param * grad_loss
-        
-        running_recon_losses.append(recon_loss.item())
-        running_loss_losses.append(loss.item())
 
         print("Train Epoch: %d | Loss: %f | Reconstruction Loss: %f | Dice Score: %f"\
                  % (i, loss.item(), recon_loss.item(), dice_score.item()), flush=True)
@@ -143,80 +135,18 @@ def train(mod,
         opt.step()
 
         if i % 1000 == 0:
-              
-            #val_loss_score, val_reconstruction_score = eval_net(gpu, model, val_file, batch_size, input_fixed, device, atlas_file, data_dir, data_loss, reg_param)
             
-            d = test_net(gpu, model, atlas_file, val_file, data_dir, target_label_numbers)
+            test_dices = test_net(gpu, model, atlas_file, val_file, data_dir, target_label_numbers)
             
-            train_loss_scores.append(np.average(running_loss_losses))
-            train_reconstruction_scores.append(np.average(running_recon_losses))
-            
-            #val_loss_scores.append(val_loss_score)
-            #val_reconstruction_scores.append(val_reconstruction_score)
-            
-            val_dices.append(d)
             train_dices.append(np.average(train_dice_acc))
+            val_dices.append(np.average(test_dices))
             
-            running_recon_losses = []
-            running_loss_losses = []
+            train_std.append(np.std(train_dice_acc))
+            val_std.append(np.std(test_dices))
             
             train_dice_acc = []
             
-    return train_loss_scores, train_reconstruction_scores, train_dices, val_dices
-            
-
-def eval_net(gpu, 
-             model,
-             val_file,
-             batch_size, 
-             input_fixed, 
-             device, 
-             atlas_file, 
-             data_dir, 
-             data_loss, 
-             reg_param):
-    
-    model.eval()
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = gpu
-    device = "cuda"
-
-    # Test file and anatomical labels we want to evaluate
-    val_file = open(val_file)
-    val_strings = val_file.readlines()
-    val_vol_names = [data_dir + x.strip() + ".npz" for x in val_strings]
-    
-    sim_loss_fn = losses.ncc_loss if data_loss == "ncc" else losses.mse_loss
-    grad_loss_fn = losses.gradient_loss
-    
-    val_example_gen = datagenerators.example_gen(val_vol_names, batch_size)
-    
-    running_recon = 0
-    running_loss = 0
-
-    for k in range(0, len(val_strings)):
-
-         # Generate the moving images and convert them to tensors.
-        moving_image = next(val_example_gen)[0]
-        input_moving = torch.from_numpy(moving_image).to(device).float()
-
-        input_moving = input_moving.permute(0, 3, 1, 2)
-        
-        with torch.no_grad():
-            warp, flow = model(input_moving, input_fixed)
-
-        # Calculate loss
-        recon_loss = sim_loss_fn(warp, input_fixed) 
-        grad_loss = grad_loss_fn(flow)
-        loss = recon_loss + reg_param * grad_loss
-        
-        running_loss += loss
-        running_recon += recon_loss
-
-        print("Val Epoch: %d | Loss: %f | Reconstruction Loss: %f"\
-                 % (k, loss.item(), recon_loss.item()), flush=True)
-    
-    return running_loss/len(val_strings), running_recon/len(val_strings)
+    return train_dices, val_dices, train_std, val_std
 
 
 def test_net(gpu, 
@@ -241,10 +171,8 @@ def test_net(gpu,
     atlas = np.load(atlas_file)
     atlas_vol = atlas['vol'][np.newaxis, ..., np.newaxis][:,:,:,100,:]
     atlas_seg = atlas['seg'][:,:,100]
-    
     vol_size = atlas_vol.shape[1:-1]
 
-    # Test file and anatomical labels we want to evaluate
     val_file = open(val_file)
     val_strings = val_file.readlines()
     
@@ -255,20 +183,16 @@ def test_net(gpu,
         
     val_vol_names = [create_vol_name(data_dir, x.strip()) for x in val_strings]
 
-    # Prepare the vm1 or vm2 model and send to device
-    nf_enc = [16, 32, 32, 32]
-    nf_dec = [32, 32, 32, 32, 32, 16, 16]
-
     # set up atlas tensor
     input_fixed  = torch.from_numpy(atlas_vol).to(device).float()
     input_fixed  = input_fixed.permute(0, 3, 1, 2)
 
     # Use this to warp segments
     
-    trf = SpatialTransformer(atlas_vol.shape[1:-1], mode='nearest')
+    trf = SpatialTransformer(vol_size, mode='nearest')
     trf.to(device)
     
-    total_dice = 0
+    total_dice = []
 
     for k in range(0, len(val_vol_names)):
 
@@ -287,12 +211,11 @@ def test_net(gpu,
         
         warp_seg = trf(moving_seg, flow).detach().cpu().numpy()
 
-        dice_score = np.average(dice(warp_seg, atlas_seg,labels=target_label_numbers))
-        print("Val iter " + str(k) + ": %f"\
-                 % (dice_score), flush=True)
+        dice_score = 1 - np.average(dice(warp_seg, atlas_seg,labels=target_label_numbers))
+        print("Val iter " + str(k) + ": %f" % (dice_score), flush=True)
 
-        total_dice += (1 - dice_score)
+        total_dice.append(dice_score)
         
-    return total_dice/len(val_vol_names)
+    return total_dice 
         
         

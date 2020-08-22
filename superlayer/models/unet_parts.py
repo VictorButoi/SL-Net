@@ -117,7 +117,7 @@ class SpatialTransformer(nn.Module):
     that uses the output from the UNet to preform an grid_sample
     https://pytorch.org/docs/stable/nn.functional.html#grid-sample
     """
-    def __init__(self, size, mode='bilinear'):
+    def __init__(self, size, pt_tfm=None, mode='bilinear'):
         """
         Instiatiate the block
             :param size: size of input to the spatial transformer block
@@ -128,9 +128,13 @@ class SpatialTransformer(nn.Module):
         # Create sampling grid
         vectors = [ torch.arange(0, s) for s in size ] 
         grids = torch.meshgrid(vectors) 
-        grid  = torch.stack(grids) # y, x, z
-        grid  = torch.unsqueeze(grid, 0)  #add batch
-        grid = grid.type(torch.FloatTensor)
+        if pt_tfm is None:
+            grid = torch.stack(grids) # y, x, z
+            grid = torch.unsqueeze(grid, 0)  #add batch
+            grid = grid.type(torch.FloatTensor)
+        else:
+            grid = torch.from_numpy(pt_tfm)
+        
         self.register_buffer('grid', grid)
 
         self.mode = mode
@@ -165,7 +169,7 @@ class conv_block(nn.Module):
     is a convolution based on the size of the input channel and output
     channels and then preforms a Leaky Relu with parameter 0.2.
     """
-    def __init__(self, dim, in_channels, out_channels, stride=1, weight=None):
+    def __init__(self, dim, in_channels=0, out_channels=0, stride=1, train=True):
         """
         Instiatiate the conv block
             :param dim: number of dimensions of the input
@@ -174,8 +178,8 @@ class conv_block(nn.Module):
             :param stride: stride of the convolution
         """
         super(conv_block, self).__init__()
-
-        conv_fn = getattr(nn, "Conv{0}d".format(dim))
+        
+        Conv_fn = getattr(nn, "Conv{0}d".format(dim))
 
         if stride == 1:
             ksize = 3
@@ -183,14 +187,22 @@ class conv_block(nn.Module):
             ksize = 4
         else:
             raise Exception('stride must be 1 or 2')
-
-        self.main = conv_fn(in_channels, out_channels, ksize, stride, 1)
+        
+        if train:
+            self.main = Conv_fn(in_channels, out_channels, ksize, stride, 1)
+        
+        self.dim = dim
         self.activation = nn.LeakyReLU(0.2)
 
-    def forward(self, x):
+    def forward(self, x, W=None, b=None):
         """
         Pass the input through the conv_block
         """
-        out = self.main(x)
+        if W is None:
+            out = self.main(x)
+        else:
+            conv_fn = getattr(F, "conv{0}d".format(self.dim))
+            out = conv_fn(x, W, b, stride=1, padding=1)
+
         out = self.activation(out)
         return out

@@ -11,6 +11,7 @@ def plot_img_array(img_array, ncol=3):
         plots[i // ncol, i % ncol].imshow(img_array[i])
 
 from functools import reduce
+
 def plot_side_by_side(img_arrays):
     flatten_list = reduce(lambda x,y: x+y, zip(*img_arrays))
 
