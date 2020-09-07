@@ -110,7 +110,7 @@ def train(mod,
         input_moving = input_moving.permute(0, 3, 1, 2)
 
         # Run the data through the model to produce warp and flow field
-       
+        
         warp, flow = model(input_moving, input_fixed)
         
         # Warp segment using flow

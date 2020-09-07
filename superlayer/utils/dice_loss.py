@@ -3,24 +3,16 @@ from torch.autograd import Function
 import numpy as np
 
 def dice_coeff(pred, target):
-    eps = 1
-       
-    assert pred.size() == target.size(), 'Input and target are different dim'
     
-    if len(target.size())==4:
-        n,c,x,y = target.size()
-    if len(target.size())==5:
-        n,c,x,y,z = target.size()
-    target = target.view(n,c,-1)
-    pred = pred.view(n,c,-1)
+    smooth = 1.
 
-    num = torch.sum(2*(target*pred),2) + eps
-    den = (pred*pred).sum(2) + (target*target).sum(2) + eps
-    dice_loss = 1-num/den
-    ind_avg = dice_loss
-    total_avg = torch.mean(dice_loss.float())
-    regions_avg = torch.mean(dice_loss.float(), 0)
-    return total_avg
+    iflat = pred.view(-1)
+    tflat = target.view(-1)
+    intersection = (iflat * tflat).sum()
+    dice_sim = ((2. * intersection + smooth) / (iflat.sum() + tflat.sum() + smooth))
+    dice_loss = 1 - dice_sim
+    
+    return dice_loss
 
 def one_hot(targets, C):    
     targets_extend=targets.clone().long()

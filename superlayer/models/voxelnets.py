@@ -17,38 +17,62 @@ from torch.distributions.normal import Normal
 from .unet_parts import SpatialTransformer
 from .unet_parts import conv_block
 
+def add_repeat_layers(d, layers, dim1, num_rep):
+    for _ in range(num_rep):
+        layers.append(conv_block(d, dim1, dim1))
+    return layers
+    
+    
 class unet_core(nn.Module):
     """
     [unet_core] is a class representing the U-Net implementation that takes in
     a fixed image and a moving image and outputs a flow-field
     """
-    def __init__(self, dim, enc_nf, dec_nf, full_size=True):
+    def __init__(self, dim, enc_nf, dec_nf, full_size, conv_num):
         super(unet_core, self).__init__()
 
         self.full_size = full_size
         self.enc_nf = enc_nf
         self.dec_nf = dec_nf
         
+        if conv_num is None:
+            self.conv_repeats = [1]*(len(enc_nf) + len(dec_nf))
+        else:
+            self.conv_repeats = conv_num
+        
         self.vm2 = len(dec_nf) == 7
 
         # Encoder functions
         self.enc = nn.ModuleList()
+        
         for i in range(len(enc_nf)):
             prev_nf = 2 if i == 0 else enc_nf[i-1]
             self.enc.append(conv_block(dim, prev_nf, enc_nf[i], 2))
+            self.enc = add_repeat_layers(dim, self.enc, enc_nf[i], self.conv_repeats[i] - 1)
 
         # Decoder functions
         self.dec = nn.ModuleList()
         self.dec.append(conv_block(dim, dec_nf[0], int(dec_nf[1]/2)))  # 1
+        self.dec = add_repeat_layers(dim, self.dec, int(dec_nf[1]/2), self.conv_repeats[len(enc_nf)] - 1)
 
         if len(dec_nf) > 4:
-            self.dec.append(conv_block(dim, dec_nf[1], int(dec_nf[2]/2)))  # 2
-            self.dec.append(conv_block(dim, dec_nf[2], int(dec_nf[3]/2)))  # 3
-            self.dec.append(conv_block(dim, dec_nf[3], dec_nf[4]))  # 4
-            self.dec.append(conv_block(dim, dec_nf[4]+2, dec_nf[5]))  # 5
+            self.dec.append(conv_block(dim, dec_nf[1], int(dec_nf[2]/2)))
+            self.dec = add_repeat_layers(dim, self.dec, int(dec_nf[2]/2), self.conv_repeats[len(enc_nf) + 1] - 1)
+            
+            self.dec.append(conv_block(dim, dec_nf[2], int(dec_nf[3]/2)))
+            self.dec = add_repeat_layers(dim, self.dec, int(dec_nf[3]/2), self.conv_repeats[len(enc_nf) + 2] - 1)
+            
+            self.dec.append(conv_block(dim, dec_nf[3], dec_nf[4]))
+            self.dec = add_repeat_layers(dim, self.dec, dec_nf[4], self.conv_repeats[len(enc_nf) + 3] - 1)
+            
+            self.dec.append(conv_block(dim, dec_nf[4]+2, dec_nf[5]))
+            self.dec = add_repeat_layers(dim, self.dec, dec_nf[5], self.conv_repeats[len(enc_nf) + 4] - 1)
         else:
-            self.dec.append(conv_block(dim, dec_nf[1], dec_nf[2]))  # 2
+            self.dec.append(conv_block(dim, dec_nf[1], dec_nf[2]))
+            self.dec = add_repeat_layers(dim, self.dec, dec_nf[2], self.conv_repeats[len(enc_nf) + 1] - 1)
+            
             self.dec.append(conv_block(dim, dec_nf[2]+2, dec_nf[3]))
+            self.dec = add_repeat_layers(dim, self.dec, dec_nf[3], self.conv_repeats[len(enc_nf) + 2] - 1)
 
         if self.full_size:
             self.dec.append(conv_block(dim, dec_nf[4] + 2, dec_nf[5], 1))
@@ -64,25 +88,40 @@ class unet_core(nn.Module):
         """
         # Get encoder activations
         x_enc = [x]
-        for l in self.enc:
-            x = l(x_enc[-1])
-            x_enc.append(x)
-
-        # Three conv + upsample + concatenate series
-        y = x_enc[-1]
-        for i in range(len(self.dec)):
-            y = self.upsample(y)
-            y = torch.cat([y, x_enc[-(i+2)]], dim=1)
-            y = self.dec[i](y)
+        last_x = x
+        conv_repeats = self.conv_repeats.copy()
+        
+        i = 0
+        while(i < len(self.enc)):
+            x = self.enc[i](last_x)
+            conv_repeats[0] -= 1
+            if conv_repeats[0] == 0:
+                del conv_repeats[0]
+                x_enc.append(x)
+            last_x = x
+            i += 1
             
-        # Two convs at full_size/2 res
-       
-        if self.full_size:
-            y = self.dec[3](y)
-            y = self.dec[4](y)
+        y = x_enc[-1]
+        
+        j = 0
+        k = 0
+        conv_rep_copy = conv_repeats.copy()
+        while(j < len(self.dec)):
+            if conv_rep_copy[0] == conv_repeats[0]:
+                y = self.upsample(y)
+                y = torch.cat([y, x_enc[-(k+2)]], dim=1)
+                k += 1
+            y = self.dec[j](y)
+            conv_repeats[0] -= 1
+            if conv_repeats[0] == 0:
+                del conv_rep_copy[0]
+                del conv_repeats[0]
+            j += 1
 
         # Upsample to full res, concatenate and conv
         if self.full_size:
+            y = self.dec[3](y)
+            y = self.dec[4](y)
             y = self.upsample(y)
             y = torch.cat([y, x_enc[0]], dim=1)
             y = self.dec[5](y)
@@ -99,7 +138,7 @@ class cvpr2018_net(nn.Module):
     [cvpr2018_net] is a class representing the specific implementation for 
     the 2018 implementation of voxelmorph.
     """
-    def __init__(self, vol_size, enc_nf, dec_nf, full_size=True):
+    def __init__(self, vol_size, enc_nf, dec_nf, conv_num=None, full_size=True):
         """
         Instiatiate 2018 model
             :param vol_size: volume size of the atlas
@@ -111,7 +150,7 @@ class cvpr2018_net(nn.Module):
 
         dim = len(vol_size)
         
-        self.unet_model = unet_core(dim, enc_nf, dec_nf, full_size)
+        self.unet_model = unet_core(dim, enc_nf, dec_nf, full_size, conv_num)
 
         # One conv to get the flow field
         conv_fn = getattr(nn, 'Conv%dd' % dim)
@@ -148,14 +187,15 @@ class sln_unet_core(nn.Module):
                  dim, 
                  enc_nf, 
                  dec_nf, 
-                 full_size=True, 
-                 superblock_size=0, 
-                 pt_head_weight=None,
-                 pt_head_bias=None,
-                 pt_tail_weight=None,
-                 pt_tail_bias=None,
-                 weight=None,
-                 bias=None):
+                 conv_num,
+                 full_size, 
+                 superblock_size, 
+                 pt_head_weight,
+                 pt_head_bias,
+                 pt_tail_weight,
+                 pt_tail_bias,
+                 weight,
+                 bias):
         
         super(sln_unet_core, self).__init__()
 
@@ -189,6 +229,11 @@ class sln_unet_core(nn.Module):
  
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
         self.down = torch.nn.MaxPool2d(2,2)
+        
+        if conv_num is None:
+            self.conv_repeats = [1]*(1 + len(self.enc_nf) + len(self.dec_nf) + 1)
+        else:
+            self.conv_repeats = conv_num
 
     def forward(self, x):
         """
@@ -197,24 +242,29 @@ class sln_unet_core(nn.Module):
         """
         # Get encoder activations
         x_enc = [x]
+        count = 0
         
         for i in range(len(self.enc_nf)):
             xenc = self.down(x_enc[-1])
-            if i == 0:
-                x = self.in_block(xenc, self.pt_hw, self.pt_hb)
-            else:
-                x = self.down_block(xenc, self.W[:,:self.half_size,:,:], self.b)
+            for _ in range(self.conv_repeats[count]):
+                if i == 0:
+                    x = self.in_block(xenc, self.pt_hw, self.pt_hb)
+                else:
+                    x = self.down_block(xenc, self.W[:,:self.half_size,:,:], self.b)
             x_enc.append(x)
+            count+=1
 
         # Three conv + upsample + concatenate series
         y = x_enc[-1]
         for i in range(len(self.dec_nf)):
             y = self.upsample(y)
             y = torch.cat([y, x_enc[-(i+2)]], dim=1)
-            if i == range(len(self.dec_nf))[-1]:
-                y = self.out_conv(y, self.pt_tw, self.pt_tb)
-            else:
-                y = self.up_block(y, self.W, self.b)
+            for _ in range(self.conv_repeats[count]):
+                if i == range(len(self.dec_nf))[-1]:
+                    y = self.out_conv(y, self.pt_tw, self.pt_tb)
+                else:
+                    y = self.up_block(y, self.W, self.b)
+            count+=1
                 
         return y
 
@@ -225,14 +275,15 @@ class sln_ae_core(nn.Module):
                  dim, 
                  enc_nf, 
                  dec_nf, 
-                 full_size=True, 
-                 superblock_size=0, 
-                 pt_head_weight=None,
-                 pt_head_bias=None,
-                 pt_tail_weight=None,
-                 pt_tail_bias=None,
-                 weight=None,
-                 bias=None):
+                 full_size, 
+                 conv_num, 
+                 superblock_size, 
+                 pt_head_weight,
+                 pt_head_bias,
+                 pt_tail_weight,
+                 pt_tail_bias,
+                 weight,
+                 bias):
         
         super(sln_ae_core, self).__init__()
 
@@ -264,6 +315,11 @@ class sln_ae_core(nn.Module):
  
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
         self.down = torch.nn.MaxPool2d(2,2)
+        
+        if conv_num is None:
+            self.conv_repeats = [1]*(1 + len(self.enc_nf) + len(self.dec_nf) + 1)
+        else:
+            self.conv_repeats = conv_num
 
     def forward(self, x):
         """
@@ -272,23 +328,28 @@ class sln_ae_core(nn.Module):
         """
         # Get encoder activations
         x_enc = [x]
+        count = 0
         
         for i in range(len(self.enc_nf)):
             xenc = self.down(x_enc[-1])
-            if i == 0:
-                x = self.in_block(xenc, self.pt_hw, self.pt_hb)
-            else:
-                x = self.down_block(xenc, self.W, self.b)
+            for _ in range(self.conv_repeats[count]):
+                if i == 0:
+                    x = self.in_block(xenc, self.pt_hw, self.pt_hb)
+                else:
+                    x = self.down_block(xenc, self.W, self.b)
             x_enc.append(x)
+            count+=1
 
         # Three conv + upsample + concatenate series
         y = x_enc[-1]
         for i in range(len(self.dec_nf)):
             y = self.upsample(y)
-            if i == range(len(self.dec_nf))[-1]:
-                y = self.out_conv(y, self.pt_tw, self.pt_tb)
-            else:
-                y = self.up_block(y, self.W, self.b)
+            for _ in range(self.conv_repeats[count]):
+                if i == range(len(self.dec_nf))[-1]:
+                    y = self.out_conv(y, self.pt_tw, self.pt_tb)
+                else:
+                    y = self.up_block(y, self.W, self.b)
+            count+=1
                 
         return y
 
@@ -300,6 +361,7 @@ class sln_cvpr2018_net(nn.Module):
                  enc_nf, 
                  dec_nf, 
                  full_size=True,
+                 conv_num=None,
                  superblock_size=0, 
                  pt_head_weight=None,
                  pt_head_bias=None,
@@ -317,11 +379,12 @@ class sln_cvpr2018_net(nn.Module):
         dim = len(vol_size)
         
         if mode=="unet":
-            self.core_model = sln_unet_core(dim, 
-                                            enc_nf, 
-                                            dec_nf, 
-                                            full_size, 
-                                            superblock_size, 
+            self.core_model = sln_unet_core(dim=dim, 
+                                            enc_nf=enc_nf, 
+                                            dec_nf=dec_nf,
+                                            full_size=full_size,
+                                            conv_num=conv_num, 
+                                            superblock_size=superblock_size,
                                             pt_head_weight=pt_head_weight,
                                             pt_head_bias=pt_head_bias,
                                             pt_tail_weight=pt_tail_weight,
@@ -329,17 +392,18 @@ class sln_cvpr2018_net(nn.Module):
                                             weight=weight,
                                             bias=bias)
         elif mode=="ae":
-            self.core_model = sln_ae_core(dim, 
-                                          enc_nf, 
-                                          dec_nf, 
-                                          full_size, 
-                                          superblock_size, 
-                                          pt_head_weight=pt_head_weight,
-                                          pt_head_bias=pt_head_bias,
-                                          pt_tail_weight=pt_tail_weight,
-                                          pt_tail_bias=pt_tail_bias,
-                                          weight=weight,
-                                          bias=bias)
+            self.core_model = sln_ae_core(dim=dim, 
+                                            enc_nf=enc_nf, 
+                                            dec_nf=dec_nf,
+                                            full_size=full_size,
+                                            conv_num=conv_num, 
+                                            superblock_size=superblock_size,
+                                            pt_head_weight=pt_head_weight,
+                                            pt_head_bias=pt_head_bias,
+                                            pt_tail_weight=pt_tail_weight,
+                                            pt_tail_bias=pt_tail_bias,
+                                            weight=weight,
+                                            bias=bias)
         else:
             raise ValueError("Not implemented")
 
@@ -362,8 +426,7 @@ class sln_cvpr2018_net(nn.Module):
             self.flow.bias = nn.Parameter(torch.from_numpy(pt_flow_bias))
             self.flow.bias.requires_grad = False
         
-        self.spatial_transform = SpatialTransformer(size=[128,128],
-                                                    pt_tfm=pt_spatial_tfm)
+        self.spatial_transform = SpatialTransformer(vol_size)
 
 
     def forward(self, src, tgt):
