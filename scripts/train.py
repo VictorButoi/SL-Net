@@ -13,72 +13,50 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append("..")
-from superlayer.models import SUnet
-from superlayer.utils import BrainD, dice_coeff, one_hot
+from superlayer.models import UNet
+from superlayer.utils import BrainD, soft_dice, hard_dice, one_hot
 from validate import eval_net
+from matplotlib import pyplot as plt
 
-dir_img = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
-dir_mask = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
-dir_checkpoint_1 = 'checkpoints_1/'
-dir_checkpoint_2 = 'checkpoints_2/'
-
-np.set_printoptions(threshold=sys.maxsize)
-torch.set_printoptions(threshold=10_000)
-
+dir_img = '/nfs02/users/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
+dir_mask = '/nfs02/users/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
 
 def train_net(net,
-              device,
-              epochs=5,
-              batch_size=1,
-              lr=0.001,
-              dice=True,
-              checkpoint=0,
-              target_label_numbers=None,
-              writer=None,
+              epochs,
+              batch_size,
+              lr,
+              target_label_numbers,
               train_path=None,
-              val_path=None):
+              val_path=None,
+              segment=True):
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    net.to(device)
     
     train = BrainD(dir_img, dir_mask, id_file=train_path, label_numbers=target_label_numbers)
     val = BrainD(dir_img, dir_mask, id_file=val_path, label_numbers=target_label_numbers)
 
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)            
-    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
-
-    n_val = len(val)
-    n_train = len(train)
-    dataset_size = n_val + n_train
+    val_loader = DataLoader(val, batch_size=1, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
     
     global_step = 0
-
-    logging.info(f'''Starting training:
-        Epochs:          {epochs}
-        Batch size:      {batch_size}
-        Learning rate:   {lr}
-        Training size:   {n_train}
-        Validation size: {n_val}
-        Device:          {device.type}
-    ''')
-
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9)
-
-    criterion = dice_coeff
+    optimizer = optim.Adam(net.parameters(), lr=lr)
     
-    train_scores = []
-    val_scores = []
+    if segment:
+        criterion = soft_dice
+    else:
+        criterion = nn.MSELoss()
     
-    train_vars = []
-    val_vars = []
+    train_soft, val_scores = [], []
+    train_vars, val_vars = [], []
     
-    train_soft = []
-    
-    sub_epoch_interval = (dataset_size // (10 * batch_size))
+    sub_epoch_interval = (len(train) // (4 * batch_size))
     
     running_train_soft = []
-    running_train_losses = []
 
     for epoch in range(epochs):
 
-        with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
+        with tqdm(total=len(train), desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
             for batch in train_loader:
                 net.train()
 
@@ -88,21 +66,13 @@ def train_net(net,
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
                 one_hot_true_masks = one_hot(true_masks, net.n_classes)
-
          
                 pred = net(imgs)
-                
-                comp = one_hot_true_masks
+                comp = one_hot_true_masks if segment else imgs
                 
                 loss = criterion(pred, comp)
                 running_train_soft.append(loss.item())
-                
-                pred = torch.argmax(pred, axis=1).unsqueeze(1)
-                hard_loss = criterion(pred, true_masks)
-                    
-                running_train_losses.append(hard_loss.item())
 
-                writer.add_scalar('Loss/train', loss.item(), global_step)
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 optimizer.zero_grad()
@@ -112,28 +82,21 @@ def train_net(net,
                 pbar.update(imgs.shape[0])
                 global_step += 1
 
-                if global_step % 4 == 0:
+                if global_step % sub_epoch_interval == 0:
 
-                    val_score, val_var = eval_net(net, val_loader, device)
+                    val_score, val_var = eval_net(net, val_loader, device, segment)
 
-                    train_scores.append(np.average(running_train_losses))
+                    train_soft.append(np.average(running_train_soft))
+                    train_vars.append(np.var(running_train_soft))
                     val_scores.append(val_score)
-                    train_vars.append(np.var(running_train_losses))
                     val_vars.append(val_var)
                     
-                    train_soft.append(np.average(running_train_soft))
                        
                     running_train_soft = []
-                    running_train_loss = []
-
-                    writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
-
+                    
                     logging.info('Validation Dice Loss: {}'.format(val_score))
-                    writer.add_scalar('Loss/test', val_score, global_step)
 
-    writer.close()
-
-    return train_scores, val_scores, train_vars, val_vars, train_soft
+    return train_soft, val_scores, train_vars, val_vars
 
 
 def get_args():
@@ -147,8 +110,6 @@ def get_args():
                         help='Learning rate', dest='lr')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
-    parser.add_argument('-s', '--scale', dest='scale', type=float, default=1,
-                        help='Downscaling factor of the images')
     parser.add_argument('-v', '--validation', dest='val', type=float, default=10.0,
                         help='Percent of the data that is used as validation (0-100)')
 

@@ -25,8 +25,8 @@ import superlayer.utils
 
 from scripts import train_net, get_args
 
-from superlayer.models import AESuperNet, AEnet, cvpr2018_net, SUnet, SuperNet, Default, sln_cvpr2018_net
-from superlayer.utils import BrainD, dice_coeff, one_hot, plot_img_array, plot_side_by_side
+from superlayer.models import SLN_AE, AE, cvpr2018_net, UNet, SLN_UNet, sln_cvpr2018_net
+from superlayer.utils import BrainD, hard_dice, soft_dice, one_hot, plot_img_array, plot_side_by_side
 
 sys.path.append("/home/vib9/src/voxelmorph/pytorch")
 import datagenerators
@@ -35,8 +35,8 @@ from models import SpatialTransformer
 sys.path.append("/home/vib9/src/voxelmorph/ext/medipy-lib/medipy")
 from metrics import dice
 
-dir_img = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
-dir_mask = '/home/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
+dir_img = '/nfs02/users/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
+dir_mask = '/nfs02/users/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/asegs/'
 
 dir_checkpoint_1 = 'checkpoints_1/'
 dir_checkpoint_2 = 'checkpoints_2/'
@@ -44,39 +44,35 @@ dir_checkpoint_2 = 'checkpoints_2/'
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 args = get_args()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-target_label_numbers = [2.0,41.0,42.0,3.0,16.0,10.0,49.0,4.0,43.0]
-val_percent = 0.1
-batch_size = args.batchsize
-lr = args.lr
 
 train_file = '/home/vib9/src/SL-Net/jupyter/partitions/train.txt'
 val_file = '/home/vib9/src/SL-Net/jupyter/partitions/val.txt'
-
-dir_i = '/nfs02/users/gid-dalcaav/projects/neuron/data/t1_mix/proc/resize256-crop_x32-slice100/train/vols/'
 atlas_file = '/home/vib9/src/voxelmorph/data/atlas_norm.npz'
 
 atlas_vol = np.load(atlas_file)['vol'][np.newaxis, ..., np.newaxis][:,:,:,100,:]
 vol_size = atlas_vol.shape[1:-1]
 
-def save_results(model, train_data, val_data, train_std, val_std, save_name, train_data2=None, slblock=False):
+def save_results(model, train_data, val_data, train_std, val_std, save_name, slblock=False):
     root = "/home/vib9/src/SL-Net/jupyter/voxel_transfer_experiments/"
     torch.save(model.state_dict(), root + "final_models/" + save_name)
+    
     train_dice = np.asarray(train_data)[np.newaxis,:]
     val_dice = np.asarray(val_data)[np.newaxis,:]
+    
     train_std = np.asarray(train_std)[np.newaxis,:]
     val_std = np.asarray(val_std)[np.newaxis,:]
     
-    if train_data2 is None:
-        dice_scores = np.concatenate((train_dice,val_dice,train_std,val_std),axis=0)
-    else:
-        train_data2 = np.asarray(train_data2)[np.newaxis,:]
-        dice_scores = np.concatenate((train_dice,val_dice,train_std,val_std,train_data2),axis=0)
+    dice_scores = np.concatenate((train_dice,val_dice,train_std,val_std),axis=0)
         
     np.save(root + "/results/" + save_name, dice_scores)
     
     if slblock:
-        np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name, model.core_model.W.cpu().data)
-        np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name + "_bias", model.core_model.b.cpu().data)
+        if "SLN" in save_name:
+            np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name, model.core_model.W.cpu().data)
+            np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name + "_bias", model.core_model.b.cpu().data)
+        else:
+            np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name, model.W.cpu().data)
+            np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name + "_bias", model.b.cpu().data)
     
 def plot_subplot_array(loss_array1, loss_array2, axis_lims, titles):
     root = "/home/vib9/src/SL-Net/jupyter/voxel_transfer_experiments/results"
