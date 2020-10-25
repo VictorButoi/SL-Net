@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions.normal import Normal
 
 
 class DoubleConv(nn.Module):
@@ -76,34 +77,40 @@ class OutConv(nn.Module):
     
     
 class simple_block(nn.Module):
-    def __init__(self, in_channels, out_channels, use_bn, weight=None, learn=False):
+    def __init__(self, in_channels=0, out_channels=0, use_bn=True, weight=None, bias=None, sb_size=0, train_block=False):
         super(simple_block, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        
-        self.W = weight
-        
-        if not weight is None and learn:
-            print('HIT HERE ONCE')
-            weight_no_grad = weight.detach()
-            
-            if torch.is_tensor(weight_no_grad):
-                self.W = weight_no_grad
-            else:
-                self.W = torch.from_numpy(weight_no_grad).cuda()
- 
+        self.sb_size = sb_size
+        self.sb_halfsize = int(sb_size/2)
 
         self.use_bn= use_bn
         
-        if weight is None:
+        if weight is None and train_block:
+            nd = Normal(0, 1e-5) 
+            self.W = nn.Parameter(nd.sample((self.sb_halfsize, sb_size, 3, 3)))
+            self.b = nn.Parameter(torch.zeros(self.sb_halfsize))  
+            self.use_weight = True
+        elif not(weight is None):
+            self.W = torch.from_numpy(weight).cuda()
+            self.b = torch.from_numpy(bias).cuda()
+            self.use_weight = True
+        else:
+            self.use_weight = False
+            
+        
+        if self.use_weight == False:
             self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
         self.bn1 = nn.InstanceNorm2d(out_channels)  
         self.activation = nn.ReLU()
 
-    def forward(self, x):
-        if not self.W is None:
-            out = F.conv2d(x, self.W, padding=1)
+    def forward(self, x, use_half=False):
+        if self.use_weight:
+            if use_half:
+                out = F.conv2d(x, self.W[:,:self.sb_halfsize,:,:], bias=self.b, padding=1)
+            else:
+                out = F.conv2d(x, self.W, bias=self.b, padding=1)
         else:  
             out = self.conv1(x)
         if self.use_bn:

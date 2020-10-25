@@ -63,16 +63,7 @@ def save_results(model, train_data, val_data, train_std, val_std, save_name, slb
     val_std = np.asarray(val_std)[np.newaxis,:]
     
     dice_scores = np.concatenate((train_dice,val_dice,train_std,val_std),axis=0)
-        
     np.save(root + "/results/" + save_name, dice_scores)
-    
-    if slblock:
-        if "SLN" in save_name:
-            np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name, model.core_model.W.cpu().data)
-            np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name + "_bias", model.core_model.b.cpu().data)
-        else:
-            np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name, model.W.cpu().data)
-            np.save("/home/vib9/src/SL-Net/superlayer/models/superblocks/" + save_name + "_bias", model.b.cpu().data)
     
 def plot_subplot_array(loss_array1, loss_array2, axis_lims, titles):
     root = "/home/vib9/src/SL-Net/jupyter/voxel_transfer_experiments/results"

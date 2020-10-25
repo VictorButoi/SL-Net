@@ -58,6 +58,13 @@ def train_net(net,
 
         with tqdm(total=len(train), desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
             for batch in train_loader:
+                
+                if global_step % sub_epoch_interval == 0:
+                    val_score, val_var = eval_net(net, val_loader, device, segment)
+                    val_scores.append(val_score)
+                    val_vars.append(val_var)
+                    logging.info('Validation Dice Loss: {}'.format(val_score))
+                    
                 net.train()
 
                 imgs = batch['image']
@@ -80,21 +87,13 @@ def train_net(net,
                 optimizer.step()
 
                 pbar.update(imgs.shape[0])
-                global_step += 1
 
                 if global_step % sub_epoch_interval == 0:
-
-                    val_score, val_var = eval_net(net, val_loader, device, segment)
-
                     train_soft.append(np.average(running_train_soft))
                     train_vars.append(np.var(running_train_soft))
-                    val_scores.append(val_score)
-                    val_vars.append(val_var)
-                    
-                       
                     running_train_soft = []
-                    
-                    logging.info('Validation Dice Loss: {}'.format(val_score))
+               
+                global_step += 1
 
     return train_soft, val_scores, train_vars, val_vars
 
