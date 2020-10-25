@@ -11,17 +11,7 @@ from torch.utils.data import Dataset
 
 import matplotlib.pyplot as plt
 
-
-lookup_table = {2.0 : 1,
-                41.0 : 2,
-                42.0 : 3,
-                3.0 : 4,
-                16.0 : 5,
-                10.0 : 6,
-                49.0 : 7,
-                4.0 : 8,
-                43.0 : 9
-               }
+lookup_table = {2.0 : 1, 3.0 : 2, 16.0 : 3, 41.0 : 4, 42.0 : 5}
 
 class BrainD(Dataset):
     def __init__(self, imgs_dir, masks_dir, id_file=None, label_numbers=None):
@@ -46,10 +36,8 @@ class BrainD(Dataset):
         mask_file = glob(self.masks_dir + (idx[:-4] + "aseg") + '*')
         img_file = glob(self.imgs_dir + idx + '*')
 
-        assert len(mask_file) == 1, \
-            f'Either no mask or multiple masks found for the ID {idx}: {mask_file}'
-        assert len(img_file) == 1, \
-            f'Either no image or multiple images found for the ID {idx}: {img_file}'
+        assert len(mask_file) == 1, 'Either no mask or multiple masks found for the ID {idx}: {mask_file}'
+        assert len(img_file) == 1, 'Either no image or multiple images found for the ID {idx}: {img_file}'
         
         mask = np.load(mask_file[0])['vol_data']
         img = np.load(img_file[0])['vol_data']

@@ -37,7 +37,7 @@ sys.path.append("../voxel/")
 import scipy.io as sio
 
 
-def train(mod,
+def train(model,
           data_dir,
           train_file,
           val_file,
@@ -60,20 +60,16 @@ def train(mod,
     atlas_vol = atlas['vol'][np.newaxis, ..., np.newaxis]
     atlas_seg = atlas['seg'][:,:,100]
 
-    # Get all the names of the training data
-    
     train_file = open(train_file)
     train_strings = train_file.readlines()
     train_vol_names = [data_dir + x.strip() + ".npz" for x in train_strings]
-    
-    model = mod
         
     model.to(device)
 
     # Set optimizer and losses
     opt = Adam(model.parameters(), lr=lr)
 
-    sim_loss_fn = losses.ncc_loss if data_loss == "ncc" else losses.mse_loss
+    sim_loss_fn = losses.mse_loss
     grad_loss_fn = losses.gradient_loss
 
     # data generator
@@ -108,17 +104,14 @@ def train(mod,
         
         input_moving = torch.from_numpy(moving_image).to(device).float()
         input_moving = input_moving.permute(0, 3, 1, 2)
-
-        # Run the data through the model to produce warp and flow field
-        
         warp, flow = model(input_moving, input_fixed)
         
         # Warp segment using flow
         moving_seg = torch.from_numpy(moving_seg).to(device).float()
         moving_seg = moving_seg.permute(0, 3, 1, 2)
-        warp_seg = trf(moving_seg, flow).detach().cpu().numpy()
+        warp_seg = trf(moving_seg, flow).detach().cpu().squeeze(0).squeeze(0).numpy()
         
-        dice_score = 1 - np.average(dice(warp_seg, atlas_seg,labels=target_label_numbers))
+        dice_score = np.average(dice(warp_seg, atlas_seg, labels=target_label_numbers))
         train_dice_acc.append(dice_score)          
         
         # Calculate loss
@@ -209,9 +202,9 @@ def test_net(gpu,
         moving_seg = torch.from_numpy(X_seg).to(device).float()
         moving_seg = moving_seg.permute(0, 3, 1, 2)
         
-        warp_seg = trf(moving_seg, flow).detach().cpu().numpy()
+        warp_seg = trf(moving_seg, flow).detach().cpu().squeeze(0).squeeze(0).numpy()
 
-        dice_score = 1 - np.average(dice(warp_seg, atlas_seg,labels=target_label_numbers))
+        dice_score = np.average(dice(warp_seg, atlas_seg,labels=target_label_numbers))
         print("Val iter " + str(k) + ": %f" % (dice_score), flush=True)
 
         total_dice.append(dice_score)
