@@ -161,6 +161,28 @@ class SpatialTransformer(nn.Module):
             new_locs = new_locs[..., [2,1,0]]
 
         return F.grid_sample(src, new_locs, mode=self.mode)
+    
+
+class FeatureWeighter(nn.Module):
+    def __init__(self, weight):
+        """
+        Instiatiate the block
+            :param weight: the premade weight block
+        """
+        super(FeatureWeighter, self).__init__()
+        nd = Normal(0, 1e-5) 
+        # Create sampling grid
+        self.weight = weight
+        self.multiplier = nn.Parameter(nd.sample(1,1,3,3))
+
+    def forward(self, src):   
+        """
+        Push the src and flow through the spatial transform block
+            :param src: the original moving image
+            :param flow: the output from the U-Net
+        """
+
+        return src * self.weight
 
 
 class conv_block(nn.Module):

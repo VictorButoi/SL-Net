@@ -28,7 +28,7 @@ class unet_core(nn.Module):
     [unet_core] is a class representing the U-Net implementation that takes in
     a fixed image and a moving image and outputs a flow-field
     """
-    def __init__(self, dim, enc_nf, dec_nf, full_size, conv_num):
+    def __init__(self, dim, enc_nf, dec_nf, follow_convs, full_size, conv_num):
         super(unet_core, self).__init__()
 
         self.full_size = full_size
@@ -46,37 +46,34 @@ class unet_core(nn.Module):
         self.enc = nn.ModuleList()
         
         for i in range(len(enc_nf)):
-            prev_nf = 2 if i == 0 else enc_nf[i-1]
+            prev_nf = 2 
+            if i == 0:
+                prev_nf = 2
+            else:
+                prev_nf = enc_nf[i-1]
             self.enc.append(conv_block(dim, prev_nf, enc_nf[i], 2))
             self.enc = add_repeat_layers(dim, self.enc, enc_nf[i], self.conv_repeats[i] - 1)
 
         # Decoder functions
         self.dec = nn.ModuleList()
-        self.dec.append(conv_block(dim, dec_nf[0], int(dec_nf[1]/2)))  # 1
-        self.dec = add_repeat_layers(dim, self.dec, int(dec_nf[1]/2), self.conv_repeats[len(enc_nf)] - 1)
+        
+        self.dec.append(conv_block(dim, dec_nf[0] + enc_nf[-1], dec_nf[1]))  # 1
+        self.dec = add_repeat_layers(dim, self.dec, dec_nf[1], self.conv_repeats[len(enc_nf)] - 1)
 
-        if len(dec_nf) > 4:
-            self.dec.append(conv_block(dim, dec_nf[1], int(dec_nf[2]/2)))
-            self.dec = add_repeat_layers(dim, self.dec, int(dec_nf[2]/2), self.conv_repeats[len(enc_nf) + 1] - 1)
-            
-            self.dec.append(conv_block(dim, dec_nf[2], int(dec_nf[3]/2)))
-            self.dec = add_repeat_layers(dim, self.dec, int(dec_nf[3]/2), self.conv_repeats[len(enc_nf) + 2] - 1)
-            
-            self.dec.append(conv_block(dim, dec_nf[3], dec_nf[4]))
-            self.dec = add_repeat_layers(dim, self.dec, dec_nf[4], self.conv_repeats[len(enc_nf) + 3] - 1)
-            
-            self.dec.append(conv_block(dim, dec_nf[4]+2, dec_nf[5]))
-            self.dec = add_repeat_layers(dim, self.dec, dec_nf[5], self.conv_repeats[len(enc_nf) + 4] - 1)
-        else:
-            self.dec.append(conv_block(dim, dec_nf[1], dec_nf[2]))
-            self.dec = add_repeat_layers(dim, self.dec, dec_nf[2], self.conv_repeats[len(enc_nf) + 1] - 1)
-            
-            self.dec.append(conv_block(dim, dec_nf[2]+2, dec_nf[3]))
-            self.dec = add_repeat_layers(dim, self.dec, dec_nf[3], self.conv_repeats[len(enc_nf) + 2] - 1)
+        self.dec.append(conv_block(dim, dec_nf[1] + enc_nf[-2], dec_nf[2]))
+        self.dec = add_repeat_layers(dim, self.dec, dec_nf[2], self.conv_repeats[len(enc_nf) + 1] - 1)
+
+        self.dec.append(conv_block(dim, dec_nf[2] + enc_nf[-3], dec_nf[3]))
+        self.dec = add_repeat_layers(dim, self.dec, dec_nf[3], self.conv_repeats[len(enc_nf) + 2] - 1)
+
+        self.dec.append(conv_block(dim, dec_nf[3] + 2, dec_nf[4]))
+        self.dec = add_repeat_layers(dim, self.dec, dec_nf[4], self.conv_repeats[len(enc_nf) + 3] - 1)
 
         if self.full_size:
-            self.dec.append(conv_block(dim, dec_nf[4] + 2, dec_nf[5], 1))
-            self.vm2_conv = conv_block(dim, dec_nf[5], dec_nf[6])
+            self.cont = nn.ModuleList()
+            
+            self.cont.append(conv_block(dim, follow_convs[0], follow_convs[1]))
+            self.cont.append(conv_block(dim, follow_convs[1], follow_convs[2]))
         
        
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
@@ -120,15 +117,8 @@ class unet_core(nn.Module):
 
         # Upsample to full res, concatenate and conv
         if self.full_size:
-            y = self.dec[3](y)
-            y = self.dec[4](y)
-            y = self.upsample(y)
-            y = torch.cat([y, x_enc[0]], dim=1)
-            y = self.dec[5](y)
-
-        # Extra conv for vm2
-        if self.vm2:
-            y = self.vm2_conv(y)
+            y = self.cont[0](y)
+            y = self.cont[1](y)
 
         return y
 
@@ -138,7 +128,7 @@ class cvpr2018_net(nn.Module):
     [cvpr2018_net] is a class representing the specific implementation for 
     the 2018 implementation of voxelmorph.
     """
-    def __init__(self, vol_size, enc_nf, dec_nf, conv_num=None, full_size=True):
+    def __init__(self, vol_size, enc_nf, dec_nf, follow_convs, conv_num=None, full_size=False):
         """
         Instiatiate 2018 model
             :param vol_size: volume size of the atlas
@@ -150,7 +140,7 @@ class cvpr2018_net(nn.Module):
 
         dim = len(vol_size)
         
-        self.unet_model = unet_core(dim, enc_nf, dec_nf, full_size, conv_num)
+        self.unet_model = unet_core(dim, enc_nf, dec_nf, follow_convs, full_size, conv_num)
 
         # One conv to get the flow field
         conv_fn = getattr(nn, 'Conv%dd' % dim)
@@ -184,9 +174,9 @@ class sln_unet_core(nn.Module):
     a fixed image and a moving image and outputs a flow-field
     """
     def __init__(self, 
-                 dim, 
-                 enc_nf, 
-                 dec_nf, 
+                 dim,
+                 depth,
+                 follow_convs, 
                  conv_num,
                  full_size, 
                  superblock_size, 
@@ -200,8 +190,7 @@ class sln_unet_core(nn.Module):
         super(sln_unet_core, self).__init__()
 
         self.full_size = full_size
-        self.enc_nf = enc_nf
-        self.dec_nf = dec_nf
+        self.depth = depth
 
         self.half_size = int(superblock_size/2)
  
@@ -231,9 +220,15 @@ class sln_unet_core(nn.Module):
         self.down = torch.nn.MaxPool2d(2,2)
         
         if conv_num is None:
-            self.conv_repeats = [1]*(1 + len(self.enc_nf) + len(self.dec_nf) + 1)
+            self.conv_repeats = [1]*(2 + 2*depth)
         else:
             self.conv_repeats = conv_num
+            
+        if self.full_size:
+            self.cont = nn.ModuleList()
+            
+            self.cont.append(conv_block(dim, follow_convs[0], follow_convs[1]))
+            self.cont.append(conv_block(dim, follow_convs[1], follow_convs[2]))
 
     def forward(self, x):
         """
@@ -244,7 +239,7 @@ class sln_unet_core(nn.Module):
         x_enc = [x]
         count = 0
         
-        for i in range(len(self.enc_nf)):
+        for i in range(self.depth):
             xenc = self.down(x_enc[-1])
             for _ in range(self.conv_repeats[count]):
                 if i == 0:
@@ -256,15 +251,20 @@ class sln_unet_core(nn.Module):
 
         # Three conv + upsample + concatenate series
         y = x_enc[-1]
-        for i in range(len(self.dec_nf)):
+        for i in range(self.depth):
             y = self.upsample(y)
             y = torch.cat([y, x_enc[-(i+2)]], dim=1)
             for _ in range(self.conv_repeats[count]):
-                if i == range(len(self.dec_nf))[-1]:
+                if i == (self.depth - 1):
                     y = self.out_conv(y, self.pt_tw, self.pt_tb)
                 else:
                     y = self.up_block(y, self.W, self.b)
             count+=1
+            
+        # Upsample to full res, concatenate and conv
+        if self.full_size:
+            y = self.cont[0](y)
+            y = self.cont[1](y)
                 
         return y
 
@@ -273,8 +273,8 @@ class sln_ae_core(nn.Module):
     
     def __init__(self, 
                  dim, 
-                 enc_nf, 
-                 dec_nf, 
+                 depth,
+                 follow_convs, 
                  full_size, 
                  conv_num, 
                  superblock_size, 
@@ -288,8 +288,7 @@ class sln_ae_core(nn.Module):
         super(sln_ae_core, self).__init__()
 
         self.full_size = full_size
-        self.enc_nf = enc_nf
-        self.dec_nf = dec_nf
+        self.depth = depth
  
         if weight is None:
             nd = Normal(0, 1e-5) 
@@ -317,9 +316,15 @@ class sln_ae_core(nn.Module):
         self.down = torch.nn.MaxPool2d(2,2)
         
         if conv_num is None:
-            self.conv_repeats = [1]*(1 + len(self.enc_nf) + len(self.dec_nf) + 1)
+            self.conv_repeats = [1]*(2 + 2*depth)
         else:
             self.conv_repeats = conv_num
+        
+        if self.full_size:
+            self.cont = nn.ModuleList()
+            
+            self.cont.append(conv_block(dim, follow_convs[0], follow_convs[1]))
+            self.cont.append(conv_block(dim, follow_convs[1], follow_convs[2]))
 
     def forward(self, x):
         """
@@ -330,7 +335,7 @@ class sln_ae_core(nn.Module):
         x_enc = [x]
         count = 0
         
-        for i in range(len(self.enc_nf)):
+        for i in range(self.depth):
             xenc = self.down(x_enc[-1])
             for _ in range(self.conv_repeats[count]):
                 if i == 0:
@@ -342,14 +347,19 @@ class sln_ae_core(nn.Module):
 
         # Three conv + upsample + concatenate series
         y = x_enc[-1]
-        for i in range(len(self.dec_nf)):
+        for i in range(self.depth):
             y = self.upsample(y)
             for _ in range(self.conv_repeats[count]):
-                if i == range(len(self.dec_nf))[-1]:
+                if i == (self.depth - 1):
                     y = self.out_conv(y, self.pt_tw, self.pt_tb)
                 else:
                     y = self.up_block(y, self.W, self.b)
             count+=1
+            
+        # Upsample to full res, concatenate and conv
+        if self.full_size:
+            y = self.cont[0](y)
+            y = self.cont[1](y)
                 
         return y
 
@@ -358,9 +368,9 @@ class sln_cvpr2018_net(nn.Module):
     
     def __init__(self,
                  vol_size, 
-                 enc_nf, 
-                 dec_nf, 
-                 full_size=True,
+                 depth,
+                 follow_convs=None,
+                 full_size=False,
                  conv_num=None,
                  superblock_size=0, 
                  pt_head_weight=None,
@@ -379,9 +389,9 @@ class sln_cvpr2018_net(nn.Module):
         dim = len(vol_size)
         
         if mode=="unet":
-            self.core_model = sln_unet_core(dim=dim, 
-                                            enc_nf=enc_nf, 
-                                            dec_nf=dec_nf,
+            self.core_model = sln_unet_core(dim=dim,
+                                            depth=depth,
+                                            follow_convs=follow_convs,
                                             full_size=full_size,
                                             conv_num=conv_num, 
                                             superblock_size=superblock_size,
@@ -392,9 +402,9 @@ class sln_cvpr2018_net(nn.Module):
                                             weight=weight,
                                             bias=bias)
         elif mode=="ae":
-            self.core_model = sln_ae_core(dim=dim, 
-                                            enc_nf=enc_nf, 
-                                            dec_nf=dec_nf,
+            self.core_model = sln_ae_core(dim=dim,
+                                            depth=depth,
+                                            follow_convs=follow_convs,
                                             full_size=full_size,
                                             conv_num=conv_num, 
                                             superblock_size=superblock_size,
@@ -409,7 +419,11 @@ class sln_cvpr2018_net(nn.Module):
 
         # One conv to get the flow field
         conv_fn = getattr(nn, 'Conv%dd' % dim)
-        self.flow = conv_fn(dec_nf[-1], dim, kernel_size=3, padding=1)      
+        
+        if mode=="ae":
+            self.flow = conv_fn(superblock_size, dim, kernel_size=3, padding=1)
+        else:
+            self.flow = conv_fn(int(superblock_size/2), dim, kernel_size=3, padding=1)
 
         # Make flow weights + bias small. Not sure this is necessary.
         nd = Normal(0, 1e-5)
@@ -421,7 +435,7 @@ class sln_cvpr2018_net(nn.Module):
             
             
         if pt_flow_bias is None:
-            self.flow.bias = nn.Parameter(torch.zeros(self.flow.bias.shape))
+            self.flow.bias = nn.Parameter(nd.sample(self.flow.bias.shape))
         else:
             self.flow.bias = nn.Parameter(torch.from_numpy(pt_flow_bias))
             self.flow.bias.requires_grad = False
