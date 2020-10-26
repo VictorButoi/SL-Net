@@ -16,6 +16,10 @@ class SLN_UNet(nn.Module):
     
     def __init__(self, input_ch, out_ch, superblock_size, depth, W=None, b=None, conv_num=None, train_block=True, retrain=False):
         super(SLN_UNet, self).__init__()
+        
+        if not (W is None) and not (b is None):
+            W = torch.from_numpy(W).cuda()
+            b = torch.from_numpy(b).cuda()
             
         self.sb_halfsize = int(superblock_size/2)
         self.sb_size = superblock_size
@@ -29,13 +33,14 @@ class SLN_UNet(nn.Module):
         self.super_block = simple_block(weight=W, bias=b, sb_size=superblock_size, train_block=train_block)
         
         if retrain:
+
             self.fw_enc = nn.ModuleList()
             for i in range(depth - 1):
-                self.enc.append(FeatureWeighter(W))
+                self.fw_enc.append(FeatureWeighter(W[:,:self.sb_halfsize,:,:], b))
                 
             self.fw_dec = nn.ModuleList()
             for i in range(depth - 1):
-                self.dec.append(FeatureWeighter(W))
+                self.fw_dec.append(FeatureWeighter(W, b))
         
         self.out_conv = nn.Conv2d(self.sb_halfsize + 1, out_ch, kernel_size=3, padding=1)
         
@@ -53,7 +58,7 @@ class SLN_UNet(nn.Module):
                 x = self.in_conv(xenc)
             else:
                 if self.retrain:
-                    x = self.fw_enc[i](xenc)
+                    x = self.fw_enc[i-1](xenc)
                 else:     
                     x = self.super_block(xenc, use_half=True)
             x_enc.append(x)

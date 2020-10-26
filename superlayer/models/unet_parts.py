@@ -92,8 +92,8 @@ class simple_block(nn.Module):
             self.b = nn.Parameter(torch.zeros(self.sb_halfsize))  
             self.use_weight = True
         elif not(weight is None):
-            self.W = torch.from_numpy(weight).cuda()
-            self.b = torch.from_numpy(bias).cuda()
+            self.W = weight
+            self.b = bias
             self.use_weight = True
         else:
             self.use_weight = False
@@ -171,25 +171,22 @@ class SpatialTransformer(nn.Module):
     
 
 class FeatureWeighter(nn.Module):
-    def __init__(self, weight):
+    def __init__(self, weight, bias):
         """
         Instiatiate the block
             :param weight: the premade weight block
         """
         super(FeatureWeighter, self).__init__()
-        nd = Normal(0, 1e-5) 
-        # Create sampling grid
         self.weight = weight
-        self.multiplier = nn.Parameter(nd.sample(1,1,3,3))
+        self.bias = bias
+        
+        w_shape = weight.shape
+        nd = Normal(0, 1e-5) 
+        self.multiplier = nn.Parameter(nd.sample((w_shape[0],w_shape[1],1,1)))
 
     def forward(self, src):   
-        """
-        Push the src and flow through the spatial transform block
-            :param src: the original moving image
-            :param flow: the output from the U-Net
-        """
-
-        return src * self.weight
+        new_weight = self.multiplier * self.weight
+        return F.conv2d(src, new_weight, bias=self.bias, padding=1)
 
 
 class conv_block(nn.Module):
